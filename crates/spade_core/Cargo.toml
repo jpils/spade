@@ -4,5 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow.workspace = true
+tempfile.workspace = true
 nalgebra = "0.34.2"
+strum = "0.28.0"
+strum_macros = "0.28.0"
+thiserror = "2.0.18"
