@@ -53,7 +53,7 @@ pub fn compute_x_angle(vec: &Vector) -> f64 {
 /// minimum image convention, vec in direct coordinates
 #[must_use]
 pub fn wrap_vector(vec: &Vector) -> Vector {
-    vec - (vec.add_scalar(f64::floor(0.5 - f64::EPSILON)))
+    vec - vec.map(|x| (x + 0.5).floor())
 }
 
 #[must_use]

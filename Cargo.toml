@@ -1,7 +1,6 @@
 [workspace]
-members = ["crates/spade_core"]
+members = ["crates/cluster","crates/spade_core"]
 resolver = "3"
 
 [workspace.dependencies]
-anyhow = "1"
 tempfile = "3"

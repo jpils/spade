@@ -93,7 +93,7 @@ pub type AtomPairs = Vec<AtomPair>;
 pub struct SupercellAtoms {
     pub a_site: Atoms,
     pub b_site: Atoms,
-    pub c_site: Atoms
+    pub x_site: Atoms
 }
 
 impl SupercellAtoms {
@@ -105,7 +105,7 @@ impl SupercellAtoms {
             let b_site = positions[n_sr..n_sr+n_ti].iter().map(|pos| Atom{ atom_type: Element::Ti, position: *pos }).collect();
             let c_site = positions[n_sr+n_ti..].iter().map(|pos| Atom{ atom_type: Element::O, position: *pos }).collect();
 
-            Ok(SupercellAtoms { a_site, b_site, c_site })
+            Ok(SupercellAtoms { a_site, b_site, x_site: c_site })
         } else {
             Err(Error::SizeMismatch { expected: n_elements, got: positions.len() })
         }
@@ -154,14 +154,14 @@ mod tests {
         assert_eq!(supercell_atoms.b_site[0].atom_type, Element::Ti);
         assert_eq!(supercell_atoms.b_site[0].position, ti);
 
-        supercell_atoms.c_site.iter().zip(vec![o1, o2, o3]).for_each(|(atom, expected)| {
+        supercell_atoms.x_site.iter().zip(vec![o1, o2, o3]).for_each(|(atom, expected)| {
             assert_eq!(atom.atom_type, Element::O);
             assert_eq!(atom.position, expected);
         });
 
         assert_eq!(supercell_atoms.a_site.len(), 1);
         assert_eq!(supercell_atoms.b_site.len(), 1);
-        assert_eq!(supercell_atoms.c_site.len(), 3);
+        assert_eq!(supercell_atoms.x_site.len(), 3);
     }
 
     #[test]

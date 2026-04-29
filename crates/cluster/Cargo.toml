@@ -1,0 +1,12 @@
+[package]
+name = "cluster"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+csv = "1.4.0"
+nalgebra = "0.34.2"
+ndarray = "0.17.2"
+rand = "0.10.1"
+random = "0.14.1"
+spade_core = { path = "../spade_core/" }
