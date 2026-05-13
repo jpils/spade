@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use crate::types::{Atom, Coordinates, Element, Matrix, ReadResult, ReadResultVariant, Vector, Vectors, Elements};
-use core::f64;
+use std::f64;
 use std::fs::File;
 use std::io::{Lines, BufRead, BufReader};
 use std::path::{Path};

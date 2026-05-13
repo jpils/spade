@@ -2,7 +2,7 @@ use crate::prelude::*;
 use crate::geometry::{get_displacements_between};
 use crate::types::{Atom, Atoms, Element, UVector, UQuaternion, Vector, Vectors, AtomDisplacements, Elements};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UnitCell {
     cell_atoms: UnitCellAtoms,
     center_of_mass: Vector,
@@ -10,11 +10,15 @@ pub struct UnitCell {
 }
 
 impl UnitCell {
-    fn get_orientation(&self) -> Option<UQuaternion> {
+    //pub fn get_atoms(&self) -> &UnitCellAtoms {
+    //    &self.cell_atoms
+    //}
+
+    pub fn get_orientation(&self) -> Option<UQuaternion> {
         self.orientation
     }
 
-    fn get_centered_cell(&self) -> Self {
+    pub fn get_centered_cell(&self) -> Self {
         let mut cell = self.clone();
 
         let center_atoms = |atoms: &mut Atoms| {
@@ -30,7 +34,7 @@ impl UnitCell {
         cell
     }
 
-    fn get_displacements_from(&self, rhs: &Self) -> Result<AtomDisplacements> {
+    pub fn get_displacements_from(&self, rhs: &Self) -> Result<AtomDisplacements> {
         let a_site_displacements = get_displacements_between(
             &self.cell_atoms.a,
             &rhs.cell_atoms.a
@@ -46,16 +50,42 @@ impl UnitCell {
 
         Ok(AtomDisplacements { a_site_displacements, b_site_displacements, x_site_displacements })
     }
+
+    pub fn rotate_cell(&mut self, q: &UQuaternion) { 
+        let rotate = |atoms: &mut Atoms| {
+            atoms
+                .iter_mut()
+                .for_each(|atom| atom.position = q*atom.position);
+        };
+
+        rotate(&mut self.cell_atoms.a);
+        rotate(&mut self.cell_atoms.b);
+        rotate(&mut self.cell_atoms.x);
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UnitCellAtoms {
     a: Atoms,
     b: Atoms,
     x: Atoms // for future: interstitial sites as Option<Atoms>
 }
 
-#[derive(Clone, Copy, Debug)]
+impl UnitCellAtoms {
+    //pub fn a(&self) -> &Atoms {
+    //    &self.a
+    //}
+
+    //pub fn b(&self) -> &Atoms {
+    //    &self.b
+    //}
+
+    //pub fn x(&self) -> &Atoms {
+    //    &self.x
+    //}
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CellGeometry {
     Cubic,
     Tetragonal,

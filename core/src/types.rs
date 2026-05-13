@@ -40,17 +40,17 @@ pub enum Coordinates {
     Cartesian
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DWType {
     HT,
     HH,
     APB
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum DWSide {
     Left,
     Right,
-    Center
 }
 
 pub enum PhaseFactor {

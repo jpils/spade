@@ -1,5 +1,5 @@
 [package]
-name = "spade_core"
+name = "spade-core"
 version = "0.1.0"
 edition = "2024"
 
@@ -9,3 +9,4 @@ nalgebra = "0.34.2"
 strum = "0.28.0"
 strum_macros = "0.28.0"
 thiserror = "2.0.18"
+rand = "0.10.1"

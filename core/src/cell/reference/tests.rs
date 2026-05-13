@@ -167,30 +167,37 @@ fn check_x_atoms_position_untilted(x_atoms: &Atoms) {
 }
 
 fn check_x_atoms_position_tilted(x_atoms: &Atoms) {
-    //left
-    assert!(x_atoms[2].position.x.is_sign_negative());
-    assert_eq!(x_atoms[2].position.y, 0.0);
-    assert_eq!(x_atoms[2].position.z, 0.0);
-    //bottom
-    assert_eq!(x_atoms[1].position.x, 0.0);
-    assert_eq!(x_atoms[1].position.y, 0.0);
-    assert!(x_atoms[1].position.z.is_sign_negative());
-    // back
-    assert_eq!(x_atoms[3].position.x, 0.0);
-    assert!(x_atoms[3].position.y.is_sign_positive());
-    assert_eq!(x_atoms[3].position.z, 0.0);
-    //right
-    assert!(x_atoms[5].position.x.is_sign_positive());
-    assert_eq!(x_atoms[5].position.y, 0.0);
-    assert_eq!(x_atoms[5].position.z, 0.0);
-    //top
-    assert_eq!(x_atoms[4].position.x, 0.0);
-    assert_eq!(x_atoms[4].position.y, 0.0);
-    assert!(x_atoms[4].position.z.is_sign_positive());
-    // front
-    assert_eq!(x_atoms[0].position.x, 0.0);
-    assert!(x_atoms[0].position.y.is_sign_negative());
-    assert_eq!(x_atoms[0].position.z, 0.0);
+    let eps = 1e-12;
+
+    // x_atoms[0] (originally front: [0.0, -0.5, 0.0] -> rotated: [0.5, 0.0, 0.0])
+    assert!((x_atoms[0].position.x - 0.5).abs() < eps);
+    assert!(x_atoms[0].position.y.abs() < eps);
+    assert!(x_atoms[0].position.z.abs() < eps);
+
+    // x_atoms[1] (originally bottom: [0.0, 0.0, -0.5] -> rotated: [0.0, 0.0, -0.5])
+    assert!(x_atoms[1].position.x.abs() < eps);
+    assert!(x_atoms[1].position.y.abs() < eps);
+    assert!((x_atoms[1].position.z - (-0.5)).abs() < eps);
+
+    // x_atoms[2] (originally left: [-0.5, 0.0, 0.0] -> rotated: [0.0, -0.5, 0.0])
+    assert!(x_atoms[2].position.x.abs() < eps);
+    assert!((x_atoms[2].position.y - (-0.5)).abs() < eps);
+    assert!(x_atoms[2].position.z.abs() < eps);
+
+    // x_atoms[3] (originally back: [0.0, 0.5, 0.0] -> rotated: [-0.5, 0.0, 0.0])
+    assert!((x_atoms[3].position.x - (-0.5)).abs() < eps);
+    assert!(x_atoms[3].position.y.abs() < eps);
+    assert!(x_atoms[3].position.z.abs() < eps);
+
+    // x_atoms[4] (originally top: [0.0, 0.0, 0.5] -> rotated: [0.0, 0.0, 0.5])
+    assert!(x_atoms[4].position.x.abs() < eps);
+    assert!(x_atoms[4].position.y.abs() < eps);
+    assert!((x_atoms[4].position.z - 0.5).abs() < eps);
+
+    // x_atoms[5] (originally right: [0.5, 0.0, 0.0] -> rotated: [0.0, 0.5, 0.0])
+    assert!(x_atoms[5].position.x.abs() < eps);
+    assert!((x_atoms[5].position.y - 0.5).abs() < eps);
+    assert!(x_atoms[5].position.z.abs() < eps);
 }
 
 fn check_atoms_element(atoms: &Atoms, element: Element) {
