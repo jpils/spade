@@ -1,39 +1,52 @@
-use super::descriptor::{Descriptor, Descriptors};
+use super::descriptor::{Descriptor, Descriptors, BbDescriptor, BbDescriptors};
 use rand::seq::{IteratorRandom};
 
-pub fn k_means(data: Descriptors, n_clusters: usize) -> Vec<Descriptors> {
+#[derive(Clone, Default, Debug)]
+pub struct Cluster {
+    pub bb_descriptors: BbDescriptors,
+    pub centroid: Descriptor
+}
+
+pub type Clusters = Vec<Cluster>;
+
+pub fn k_means(data: BbDescriptors, n_clusters: usize) -> Clusters {
     assert!(n_clusters > 0 && n_clusters < data.len());
 
-    let mut current_centroids: Vec<Descriptor> = data
+    let mut current_centroids: Descriptors = data
         .iter()
         .sample(&mut rand::rng(), n_clusters)
         .into_iter()
         .cloned()
+        .map(|bb_desc| bb_desc.descriptor)
         .collect();
 
     loop {
-        let mut clusters: Vec<Vec<&Descriptor>> = vec![Vec::new(); current_centroids.len()];
-        for point in &data {
+        let mut clusters: Clusters = vec![Cluster::default(); n_clusters];
+        for (cluster, centroid) in clusters.iter_mut().zip(current_centroids.clone()) {
+            cluster.centroid = centroid;
+        }
+
+        for bb_desc in &data {
             let cluster_id = current_centroids
                 .iter()
                 .enumerate()
-                .map(|(id, centroid)| (id, (point - centroid).norm_squared()))
+                .map(|(id, centroid)| (id, (bb_desc.descriptor - centroid).norm_squared()))
                 .min_by(|(_, a), (_, b)| a.total_cmp(&b))
                 .map(|(id, _)| id)
                 .unwrap();
 
-            clusters[cluster_id].push(point);
+            clusters[cluster_id].bb_descriptors.push(*bb_desc);
         }
 
         let new_centroids = update_centroids(&clusters);
 
         if converged(&current_centroids, &new_centroids) {
-            let clusters: Vec<Descriptors> = clusters
-                .into_iter()
-                .map(|cluster| cluster.into_iter().cloned().collect())
-                .collect();
+            for (cluster, centroid) in clusters.iter_mut().zip(new_centroids.clone()) {
+                cluster.centroid = centroid;
+            }
             return clusters;
         }
+
         current_centroids = new_centroids;
     }
 }
@@ -47,17 +60,21 @@ pub fn get_cluster_center(cluster: &Descriptors) -> Descriptor {
 }
 
 fn converged(current: &Vec<Descriptor>, new: &Vec<Descriptor>) -> bool {
-    current.iter().zip(new).all(|(o, n)| (o - n).norm_squared() < 1e-12)
+    current
+        .iter()
+        .zip(new)
+        .all(|(o, n)| (o - n)
+            .norm_squared() < 1e-12)
 }
 
-fn update_centroids(clusters: &Vec<Vec<&Descriptor>>) -> Vec<Descriptor> {
+fn update_centroids(clusters: &Clusters) -> Descriptors {
     let mut centroids: Vec<Descriptor> = Vec::with_capacity(clusters.len());
     for cluster in clusters {
-        let centroid = cluster
+        let centroid = cluster.bb_descriptors
             .iter()
-            .fold(Descriptor::zeros(), |acc, &point| acc + point);
+            .fold(Descriptor::zeros(), |acc, &point| acc + point.descriptor);
 
-        centroids.push(centroid / cluster.len() as f64);
+        centroids.push(centroid / cluster.bb_descriptors.len() as f64);
     }
     centroids
 }
@@ -107,14 +124,18 @@ mod tests {
 
     #[test]
     fn test_update_centroids() {
-        let p1 = uniform_descriptor(0.0);
-        let p2 = uniform_descriptor(2.0);
-        let p3 = uniform_descriptor(10.0);
-
-        // Map cluster references to match Vec<Vec<&Descriptor>> signature
-        let clusters: Vec<Vec<&Descriptor>> = vec![
-            vec![&p1, &p2], // Center should be 1.0
-            vec![&p3],      // Center should be 10.0
+        let clusters = vec![
+            Cluster {
+                bb_descriptors: vec![
+                    bb_descriptor(0.0),
+                    bb_descriptor(2.0),
+                ],
+                centroid: Descriptor::zeros(),
+            },
+            Cluster {
+                bb_descriptors: vec![bb_descriptor(10.0)],
+                centroid: Descriptor::zeros(),
+            },
         ];
 
         let updated = update_centroids(&clusters);
@@ -150,12 +171,12 @@ mod tests {
         // Build a highly distinct, separable dataset:
         // 3 points close to 0.0, 3 points close to 100.0
         let data = vec![
-            structured_descriptor(0.0, 0.1, 0.0),
-            structured_descriptor(0.1, 0.0, 0.1),
-            structured_descriptor(0.0, 0.0, 0.0),
-            structured_descriptor(100.0, 100.0, 100.0),
-            structured_descriptor(100.1, 100.0, 100.0),
-            structured_descriptor(100.0, 100.1, 100.2),
+            bb_structured_descriptor(0.0, 0.1, 0.0),
+            bb_structured_descriptor(0.1, 0.0, 0.1),
+            bb_structured_descriptor(0.0, 0.0, 0.0),
+            bb_structured_descriptor(100.0, 100.0, 100.0),
+            bb_structured_descriptor(100.1, 100.0, 100.0),
+            bb_structured_descriptor(100.0, 100.1, 100.2),
         ];
 
         let n_clusters = 2;
@@ -164,7 +185,10 @@ mod tests {
         // Verify the exact cluster split size matching the target groups
         assert_eq!(final_clusters.len(), 2);
         
-        let mut lengths = vec![final_clusters[0].len(), final_clusters[1].len()];
+        let mut lengths = vec![
+            final_clusters[0].bb_descriptors.len(),
+            final_clusters[1].bb_descriptors.len(),
+        ];
         lengths.sort();
         
         assert_eq!(lengths, vec![3, 3], "Data points failed to segment evenly into clear domains.");
@@ -173,20 +197,34 @@ mod tests {
     #[test]
     #[should_panic(expected = "assertion failed")]
     fn test_k_means_panic_on_zero_clusters() {
-        let data = vec![uniform_descriptor(1.0), uniform_descriptor(2.0)];
+        let data = vec![bb_descriptor(1.0), bb_descriptor(2.0)];
         let _ = k_means(data, 0);
     }
 
     #[test]
     #[should_panic(expected = "assertion failed")]
     fn test_k_means_panic_on_excessive_clusters() {
-        let data = vec![uniform_descriptor(1.0), uniform_descriptor(2.0)];
+        let data = vec![bb_descriptor(1.0), bb_descriptor(2.0)];
         // Requesting 2 or more clusters when data length is 2 breaks your `n_clusters < data.len()` guardrail
         let _ = k_means(data, 2);
     }
 
     fn uniform_descriptor(val: f64) -> Descriptor {
         Descriptor::from_element(val)
+    }
+
+    fn bb_descriptor(val: f64) -> BbDescriptor {
+        BbDescriptor {
+            descriptor: uniform_descriptor(val),
+            reference_b_atom: Default::default(),
+        }
+    }
+
+    fn bb_structured_descriptor(x: f64, y: f64, z: f64) -> BbDescriptor {
+        BbDescriptor {
+            descriptor: structured_descriptor(x, y, z),
+            reference_b_atom: Default::default(),
+        }
     }
 
     fn structured_descriptor(x: f64, y: f64, z: f64) -> Descriptor {

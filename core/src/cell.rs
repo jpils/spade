@@ -1,57 +1,81 @@
 use crate::prelude::*;
 use crate::geometry::{get_displacements_between};
-use crate::types::{Atom, Atoms, Element, UVector, UQuaternion, Vector, Vectors, AtomDisplacements, Elements};
+use crate::types::{Atom, Atoms, Element, UVector, UQuaternion, Vector, Vectors, AtomDisplacements, Elements, CellAlignment};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct UnitCell {
-    cell_atoms: UnitCellAtoms,
-    center_of_mass: Vector,
-    orientation: Option<UQuaternion>
+pub(crate) struct UnitCell {
+    pub(crate) cell_atoms: UnitCellAtoms,
+    pub(crate) center_of_mass: Vector,
 }
 
-impl UnitCell {
-    //pub fn get_atoms(&self) -> &UnitCellAtoms {
-    //    &self.cell_atoms
-    //}
+pub(crate) trait UnitCellOps: AsUnitCell {
+    fn center_inplace(&mut self) -> &Self;
+    fn centered_cell(&self) -> Self;
+    fn displacements_from<Cell: UnitCellOps>(&self, rhs: &Cell) -> Result<AtomDisplacements>;
+    fn rotate_inplace(&mut self, q: &UQuaternion) -> &Self;
+    fn rotated_cell(&self, q: &UQuaternion) -> Self;
+}
 
-    pub fn get_orientation(&self) -> Option<UQuaternion> {
-        self.orientation
+pub(crate) trait AsUnitCell {
+    fn as_unit_cell(&self) -> &UnitCell;
+    fn as_unit_cell_mut(&mut self) -> &mut UnitCell;
+}
+
+impl AsUnitCell for UnitCell {
+    fn as_unit_cell(&self) -> &UnitCell {
+        self
     }
 
-    pub fn get_centered_cell(&self) -> Self {
-        let mut cell = self.clone();
+    fn as_unit_cell_mut(&mut self) -> &mut UnitCell {
+        self
+    }
+}
 
+impl UnitCellOps for UnitCell {
+    fn center_inplace(&mut self) -> &Self {
         let center_atoms = |atoms: &mut Atoms| {
             for atom in atoms {
-                atom.position -= cell.center_of_mass;
+                atom.position -= self.center_of_mass;
             }
         };
 
-        center_atoms(&mut cell.cell_atoms.a);
-        center_atoms(&mut cell.cell_atoms.b);
-        center_atoms(&mut cell.cell_atoms.x);
+        center_atoms(&mut self.cell_atoms.a);
+        center_atoms(&mut self.cell_atoms.b);
+        center_atoms(&mut self.cell_atoms.x);
 
+        self
+    }
+
+    fn centered_cell(&self) -> Self {
+        let mut cell = self.clone();
+        cell.center_inplace();
         cell
     }
 
-    pub fn get_displacements_from(&self, rhs: &Self) -> Result<AtomDisplacements> {
+    fn displacements_from<Cell: UnitCellOps>(&self, rhs: &Cell) -> Result<AtomDisplacements> {
         let a_site_displacements = get_displacements_between(
             &self.cell_atoms.a,
-            &rhs.cell_atoms.a
+            &rhs.as_unit_cell().cell_atoms.a
         )?;
+
         let b_site_displacements = get_displacements_between(
             &self.cell_atoms.b,
-            &rhs.cell_atoms.b
+            &rhs.as_unit_cell().cell_atoms.b
         )?;
+
         let x_site_displacements = get_displacements_between(
             &self.cell_atoms.x,
-            &rhs.cell_atoms.x
+            &rhs.as_unit_cell().cell_atoms.x
         )?;
 
-        Ok(AtomDisplacements { a_site_displacements, b_site_displacements, x_site_displacements })
+        Ok(AtomDisplacements { 
+            a_site_displacements, 
+            b_site_displacements, 
+            x_site_displacements 
+        })
     }
 
-    pub fn rotate_cell(&mut self, q: &UQuaternion) { 
+    fn rotate_inplace(&mut self, q: &UQuaternion) -> &Self {
         let rotate = |atoms: &mut Atoms| {
             atoms
                 .iter_mut()
@@ -61,31 +85,25 @@ impl UnitCell {
         rotate(&mut self.cell_atoms.a);
         rotate(&mut self.cell_atoms.b);
         rotate(&mut self.cell_atoms.x);
+
+        self
+    }
+
+    fn rotated_cell(&self, q: &UQuaternion) -> Self {
+        let mut current_uc = self.clone();
+        current_uc.rotate_inplace(q);
+        current_uc
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnitCellAtoms {
-    a: Atoms,
-    b: Atoms,
-    x: Atoms // for future: interstitial sites as Option<Atoms>
+    pub(crate) a: Atoms,
+    pub(crate) b: Atoms,
+    pub(crate) x: Atoms // for future: interstitial sites as Option<Atoms>
 }
 
-impl UnitCellAtoms {
-    //pub fn a(&self) -> &Atoms {
-    //    &self.a
-    //}
-
-    //pub fn b(&self) -> &Atoms {
-    //    &self.b
-    //}
-
-    //pub fn x(&self) -> &Atoms {
-    //    &self.x
-    //}
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum CellGeometry {
     Cubic,
     Tetragonal,

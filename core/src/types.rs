@@ -2,38 +2,45 @@ use crate::prelude::*;
 use nalgebra::{Matrix3, UnitQuaternion, UnitVector3, Vector3};
 use strum_macros::EnumString;
 
-pub type Vector = Vector3<f64>;
-pub type Vectors = Vec<Vector>;
-pub type NearestNeighborDist = Vec<(usize, f64)>;
-pub type UVector = UnitVector3<f64>;
-pub type UQuaternion = UnitQuaternion<f64>;
-pub type Matrix = Matrix3<f64>;
+pub(crate) type Vector = Vector3<f64>;
+pub(crate) type Vectors = Vec<Vector>;
+pub(crate) type NearestNeighborDist = Vec<(usize, f64)>;
+pub(crate) type UVector = UnitVector3<f64>;
+pub(crate) type UQuaternion = UnitQuaternion<f64>;
+pub(crate) type Matrix = Matrix3<f64>;
 
-#[derive(Debug, PartialEq, EnumString, Clone, Copy, Default)]
-pub enum Element {
+pub(crate) trait AsVector {
+    fn as_vector(&self) -> &Vector;
+    fn as_vector_mut(&mut self) -> &mut Vector;
+}
+
+pub(crate) trait AsMatrix {
+    fn as_matrix(&self) -> &Matrix;
+    fn as_matrix_mut(&mut self) -> &mut Matrix;
+}
+
+#[derive(Debug, PartialEq, EnumString, Clone, Copy)]
+pub(crate) enum Element {
     Sr,
     Ti,
     O,
-    #[default]
-    Unknown
 }
 
 impl Element {
     #[must_use]
-    pub fn get_mass(&self) -> Option<f64> {
+    pub(crate) fn get_mass(&self) -> f64 {
         match *self {
-            Element::Sr => Some(87.62),
-            Element::Ti => Some(47.867),
-            Element::O => Some(15.999),
-            Element::Unknown => None
+            Element::Sr => 87.62,
+            Element::Ti => 47.867,
+            Element::O => 15.999,
         }
     }
 }
 
-pub type Elements = Vec<Element>;
+pub(crate) type Elements = Vec<Element>;
 
 #[derive(Debug, EnumString, PartialEq, Clone, Copy)]
-pub enum Coordinates {
+pub(crate) enum Coordinates {
     #[strum(serialize = "D", serialize = "Direct")]
     Direct,
     #[strum(serialize = "C", serialize = "Cartesian")]
@@ -41,48 +48,50 @@ pub enum Coordinates {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum DWType {
+pub(crate) enum DWType {
     HT,
     HH,
     APB
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum DWSide {
+pub(crate) enum DWSide {
     Left,
     Right,
 }
 
-pub enum PhaseFactor {
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PhaseFactor {
     Negative,
     Positive
 }
 
-pub enum Rotation {
-    Right,
-    Left
+impl PhaseFactor {
+    pub(crate) fn to_int(&self) -> i32 {
+        match self {
+            Self::Negative => -1,
+            Self::Positive => 1
+        }
+    }
 }
 
-pub enum Observable {
-    OP { phi: Vector },
-    Polarization { pol: Vector },
-    Strain { epsilon: Matrix },
-    GammaMode { gamma: Vector },
-    DwDiffusionConst { diff_const: f64 }
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) struct CellAlignment {
+    pub(crate) unit_quaternion: UQuaternion,
+    pub(crate) ref_variant: RotationVariant, 
+    pub(crate) error: f64
 }
-
-pub type Observables = Vec<Observable>;
 
 #[derive(PartialEq, Debug, Copy, Clone, Default)]
-pub struct Atom {
-    pub atom_type: Element,
-    pub position: Vector,
+pub(crate) struct Atom {
+    pub(crate) atom_type: Option<Element>,
+    pub(crate) position: Vector,
 }
 
 impl Atom {
     #[must_use]
     pub fn new(atom_type: Element, position: Vector) -> Self {
-        Atom { atom_type, position }
+        Atom { atom_type: Some(atom_type), position }
     }
 }
 
@@ -101,9 +110,9 @@ impl SupercellAtoms {
         let n_elements = n_sr + n_ti + n_o;
 
         if positions.len() == n_elements {
-            let a_site = positions[..n_sr].iter().map(|pos| Atom{ atom_type: Element::Sr, position: *pos }).collect();
-            let b_site = positions[n_sr..n_sr+n_ti].iter().map(|pos| Atom{ atom_type: Element::Ti, position: *pos }).collect();
-            let c_site = positions[n_sr+n_ti..].iter().map(|pos| Atom{ atom_type: Element::O, position: *pos }).collect();
+            let a_site = positions[..n_sr].iter().map(|pos| Atom{ atom_type: Some(Element::Sr), position: *pos }).collect();
+            let b_site = positions[n_sr..n_sr+n_ti].iter().map(|pos| Atom{ atom_type: Some(Element::Ti), position: *pos }).collect();
+            let c_site = positions[n_sr+n_ti..].iter().map(|pos| Atom{ atom_type: Some(Element::O), position: *pos }).collect();
 
             Ok(SupercellAtoms { a_site, b_site, x_site: c_site })
         } else {
@@ -113,9 +122,17 @@ impl SupercellAtoms {
 }
 
 pub struct AtomDisplacements {
-    pub a_site_displacements: Vectors,
-    pub b_site_displacements: Vectors,
-    pub x_site_displacements: Vectors
+    pub(crate) a_site_displacements: Vectors,
+    pub(crate) b_site_displacements: Vectors,
+    pub(crate) x_site_displacements: Vectors
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RotationVariant {
+    R0,
+    R90,
+    R180,
+    R270
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -148,14 +165,14 @@ mod tests {
 
         let supercell_atoms = SupercellAtoms::new(&positions, 1, 1, 3).unwrap();
 
-        assert_eq!(supercell_atoms.a_site[0].atom_type, Element::Sr);
+        assert_eq!(supercell_atoms.a_site[0].atom_type.unwrap(), Element::Sr);
         assert_eq!(supercell_atoms.a_site[0].position, sr);
 
-        assert_eq!(supercell_atoms.b_site[0].atom_type, Element::Ti);
+        assert_eq!(supercell_atoms.b_site[0].atom_type.unwrap(), Element::Ti);
         assert_eq!(supercell_atoms.b_site[0].position, ti);
 
         supercell_atoms.x_site.iter().zip(vec![o1, o2, o3]).for_each(|(atom, expected)| {
-            assert_eq!(atom.atom_type, Element::O);
+            assert_eq!(atom.atom_type.unwrap(), Element::O);
             assert_eq!(atom.position, expected);
         });
 

@@ -1,11 +1,21 @@
+//! providing a method to calculate descriptors to classify domains and domain boundaries
+
 use crate::{error::Error, geometry, parser::Parser, types::{Atom, Atoms, Matrix, ReadResultVariant, SupercellAtoms, Vector, Vectors}, geometry::NearestNeighbor};
 use nalgebra::{SVector};
 
 pub(crate) type Descriptor = SVector<f64, 18>;
-pub(crate) type Descriptors = Vec<SVector<f64, 18>>;
+pub(crate) type Descriptors = Vec<Descriptor>;
 
-pub(crate) fn calculate_descriptors(mut b_b: Vec<NearestNeighbor>, b_x: Vec<NearestNeighbor>) -> Vec<(Atom, Descriptor)> {
-    let mut descriptors: Vec<(Atom, Descriptor)> = Vec::with_capacity(b_b.len());
+#[derive(Clone, Copy, Debug)]
+pub struct BbDescriptor {
+    pub descriptor: Descriptor,
+    pub reference_b_atom: Atom
+}
+
+pub(crate) type BbDescriptors = Vec<BbDescriptor>;
+
+pub(crate) fn calculate_bb_descriptors(mut b_b: Vec<NearestNeighbor>, b_x: Vec<NearestNeighbor>) -> BbDescriptors {
+    let mut descriptors: BbDescriptors = Vec::with_capacity(b_b.len());
     while let Some(b) = b_b.pop() {
         let current = b.reference;
         let neighbor = b.neighbors[0].0;
@@ -13,20 +23,22 @@ pub(crate) fn calculate_descriptors(mut b_b: Vec<NearestNeighbor>, b_x: Vec<Near
         let current_x = b_x.iter().find(|nn| nn.reference == current).unwrap();
         let neighbor_x = b_x.iter().find(|nn| nn.reference == neighbor).unwrap();
 
-        let current_desc = get_domain_descriptor(current_x.to_owned());
-        let neighbor_desc = get_domain_descriptor(neighbor_x.to_owned());
+        let current_desc = get_b_site_descriptor(current_x.to_owned());
+        let neighbor_desc = get_b_site_descriptor(neighbor_x.to_owned());
         let avg_desc = (current_desc + neighbor_desc)/2.0;
 
-        descriptors.push((current, avg_desc));
+        let bb_descriptor = BbDescriptor { descriptor: avg_desc, reference_b_atom: current };
+        descriptors.push(bb_descriptor);
     }
+
     descriptors
 }
 
-fn get_domain_descriptor(b_nns: NearestNeighbor) -> Descriptor {
+fn get_b_site_descriptor(b_nns: NearestNeighbor) -> Descriptor {
     let vectors = b_nns.neighbors.iter()
         .map(|(_, neighbor, _)| neighbor.position)
         .collect::<Vec<_>>();
-    let sorted_vectors = sort_x(vectors);
+    let sorted_vectors = sort_octahedral_vectors(vectors);
     
     let mut arr = [0.0; 18];
     for (vec_id, vec) in sorted_vectors.into_iter().enumerate() {
@@ -39,9 +51,8 @@ fn get_domain_descriptor(b_nns: NearestNeighbor) -> Descriptor {
     Descriptor::from(arr)
 }
 
-fn sort_x(positions: Vectors) -> Vectors { // do something with the y pair
+fn sort_octahedral_vectors(positions: Vectors) -> Vectors {
     let (y_top_id, &y_top) = positions.iter().enumerate().max_by(|a, b| a.1.y.total_cmp(&b.1.y)).unwrap();
-
     let mut positions = positions.clone();
     positions.swap_remove(y_top_id);
     let (y_bottom_id, &y_bottom) = positions.iter().enumerate().min_by(|a, b| a.1.y.total_cmp(&b.1.y)).unwrap();
@@ -72,7 +83,7 @@ mod tests {
     use std::f64::consts::PI;
 
     #[test]
-    fn test_sort_x_ordering() {
+    fn test_sort_octahedral_vectors_ordering() {
         // shuffle the octahedral relative vectors arbitrarily for testing
         let input_positions = vec![
             Vector::new(0.0, 0.0, 0.5),   // Eq: PI/2 rad
@@ -84,7 +95,7 @@ mod tests {
             Vector::new(-0.5, 0.0, 0.0),  // Eq: PI rad
         ];
 
-        let sorted = sort_x(input_positions);
+        let sorted = sort_octahedral_vectors(input_positions);
 
         assert_eq!(sorted.len(), 6);
         
@@ -103,9 +114,9 @@ mod tests {
     }
 
     #[test]
-    fn test_get_domain_descriptor() {
+    fn test_get_b_site_descriptor() {
         let nn_octahedron = create_mock_octahedron(Vector::zeros());
-        let descriptor = get_domain_descriptor(nn_octahedron);
+        let descriptor = get_b_site_descriptor(nn_octahedron);
 
         // Vector length validation (18 elements total for 6 coordinates * 3 dimensions)
         assert_eq!(descriptor.len(), 18);
@@ -122,8 +133,8 @@ mod tests {
         assert_eq!(descriptor[5], 0.0);
     }
 
-#[test]
-    fn test_calculate_descriptors_averaging() {
+    #[test]
+    fn test_calculate_bb_link_descriptors_averaging() {
         // Establish two coordinated B-sites adjacent to each other
         let b1_center = Vector::new(0.0, 0.0, 0.0);
         let b2_center = Vector::new(1.0, 0.0, 0.0);
@@ -157,20 +168,20 @@ mod tests {
             distorted_octahedron.clone(),
         ];
 
-        let results = calculate_descriptors(b_b_pair, b_x_pair);
+        let results = calculate_bb_descriptors(b_b_pair, b_x_pair);
 
         assert_eq!(results.len(), 2);
 
         // Extract individual independent descriptors to manually calculate the ground truth
-        let desc_b1 = get_domain_descriptor(create_mock_octahedron(b1_center));
-        let desc_b2 = get_domain_descriptor(distorted_octahedron);
+        let desc_b1 = get_b_site_descriptor(create_mock_octahedron(b1_center));
+        let desc_b2 = get_b_site_descriptor(distorted_octahedron);
         let expected_average_desc = (desc_b1 + desc_b2) / 2.0;
 
-        for (mapped_atom, computed_desc) in results {
-            if mapped_atom.position == b1_center {
-                assert!((computed_desc - expected_average_desc).norm() < 1e-12);
-            } else if mapped_atom.position == b2_center {
-                assert!((computed_desc - expected_average_desc).norm() < 1e-12);
+        for desc in results {
+            if desc.reference_b_atom.position == b1_center {
+                assert!((desc.descriptor - expected_average_desc).norm() < 1e-12);
+            } else if desc.reference_b_atom.position == b2_center {
+                assert!((desc.descriptor - expected_average_desc).norm() < 1e-12);
             } else {
                 panic!("Encountered unknown structural mapping reference point!");
             }
@@ -179,7 +190,7 @@ mod tests {
 
     fn create_mock_atom(element: Element, pos: Vector) -> Atom {
         Atom {
-            atom_type: element,
+            atom_type: Some(element),
             position: pos,
         }
     }

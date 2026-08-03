@@ -8,3 +8,5 @@ pub mod parser;
 pub mod cell;
 pub mod geometry;
 pub mod classification;
+pub mod optimization;
+pub mod observables;

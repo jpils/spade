@@ -1,7 +1,7 @@
 use super::{geometry, BuildContext, Result, UnitCell, UnitCellAtoms, Elements, Atoms, Vector, DWType, Matrix};
-use crate::{error::Error, types::{Atom, DWSide}};
+use crate::{cell::simulation::SimCell, error::Error, types::{Atom, DWSide}};
 
-pub(super) fn build_cell(ctx: BuildContext) -> Result<UnitCell> {
+pub(super) fn build_cell(ctx: BuildContext) -> Result<SimCell> {
     let atoms_dir = ctx.atoms.clone();
 
     let com = compute_com(&atoms_dir)?;
@@ -17,11 +17,12 @@ pub(super) fn build_cell(ctx: BuildContext) -> Result<UnitCell> {
         x: global_frame(x_site, com)
     };
 
-    Ok(UnitCell {
+    let uc = UnitCell {
         cell_atoms: uc_atoms,
         center_of_mass: com_cart,
-        orientation: ctx.orientation
-    })
+    };
+
+    Ok(SimCell(uc))
 }
 
 fn global_frame(mut atoms: Atoms, com: Vector) -> Atoms {
@@ -35,8 +36,8 @@ fn compute_com(atoms: &Atoms) -> Result<Vector> {
         .iter()
         .try_fold((Vector::zeros(), 0.0), |(acc_weighted_sum, acc_total_mass), atom| {
             let mass = atom.atom_type
-                .get_mass()
-                .ok_or_else(|| Error::Generic("Atom type mass unknown".into()))?;
+                .ok_or_else(|| Error::Generic("Atom type is set to None".into()))?
+                .get_mass();
             Ok::<_, Error>((acc_weighted_sum + mass * atom.position, acc_total_mass + mass))
         })?;
 
@@ -50,9 +51,10 @@ fn split_atoms(atoms: Atoms, elements: &Elements) -> Result<(Atoms, Atoms, Atoms
 
     for atom in atoms {
         match atom.atom_type {
-            t if t == elements[0] => a_site_atoms.push(atom),
-            t if t == elements[1] => b_site_atoms.push(atom),
-            t if t == elements[2] => x_site_atoms.push(atom),
+            Some(t) if t == elements[0] => a_site_atoms.push(atom),
+            Some(t) if t == elements[1] => b_site_atoms.push(atom),
+            Some(t) if t == elements[2] => x_site_atoms.push(atom),
+            None => return Err(Error::Generic("Atom type is set to None".into())),
             _ => return Err(Error::Generic("Atom type not found in elements provided".into()))
         }
     }

@@ -5,8 +5,6 @@ use crate::types::{Atom, Atoms, Matrix, UVector, Vector, Vectors};
 
 use nalgebra::{Rotation3, SVector};
 
-pub type Descriptor = SVector<f64, 18>;
-pub type Descriptors = Vec<SVector<f64, 18>>;
 pub type NN = Vec<(Atom, Vec<(Atom, f64)>)>;
 
 #[derive(Debug, Clone)]
@@ -180,12 +178,12 @@ mod tests {
     #[test]
     fn test_get_displacements_between() {
         let lhs = vec![
-            Atom { atom_type: Element::Unknown, position: Vector::new(1.0, 2.0, 3.0) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(4.0, 5.0, 6.0) },
+            Atom { atom_type: None, position: Vector::new(1.0, 2.0, 3.0) },
+            Atom { atom_type: None, position: Vector::new(4.0, 5.0, 6.0) },
         ];
         let rhs = vec![
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.5, 1.0, 1.5) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(2.0, 2.5, 3.0) },
+            Atom { atom_type: None, position: Vector::new(0.5, 1.0, 1.5) },
+            Atom { atom_type: None, position: Vector::new(2.0, 2.5, 3.0) },
         ];
 
         let displacements = get_displacements_between(&lhs, &rhs).unwrap();
@@ -197,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_get_displacements_size_mismatch() {
-        let lhs = vec![Atom { atom_type: Element::Unknown, position: Vector::zeros() }];
+        let lhs = vec![Atom { atom_type: None, position: Vector::zeros() }];
         let rhs = vec![];
 
         let result = get_displacements_between(&lhs, &rhs);
@@ -207,7 +205,7 @@ mod tests {
     #[test]
     fn test_rotate_atom() {
         let mut atom = Atom {
-            atom_type: Element::Unknown,
+            atom_type: None,
             position: Vector::new(1.0, 0.0, 0.0),
         };
         let axis = UVector::new_normalize(Vector::new(0.0, 0.0, 1.0));
@@ -222,8 +220,8 @@ mod tests {
     #[test]
     fn test_rotate_x_site_atoms() {
         let mut atoms = vec![
-            Atom { atom_type: Element::Unknown, position: Vector::new(1.0, 0.0, 0.0) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.0, 1.0, 0.0) },
+            Atom { atom_type: None, position: Vector::new(1.0, 0.0, 0.0) },
+            Atom { atom_type: None, position: Vector::new(0.0, 1.0, 0.0) },
         ];
         let axis = UVector::new_normalize(Vector::new(0.0, 0.0, 1.0));
         let angle = PI / 2.0;
@@ -271,10 +269,10 @@ mod tests {
 
     fn test_atoms() -> (Atoms, Atoms) {
         let a = vec![
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.0, 0.0, 0.0) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.5, 0.5, 0.5) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.2, 0.2, 0.2) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.8, 0.8, 0.8) },
+            Atom { atom_type: None, position: Vector::new(0.0, 0.0, 0.0) },
+            Atom { atom_type: None, position: Vector::new(0.5, 0.5, 0.5) },
+            Atom { atom_type: None, position: Vector::new(0.2, 0.2, 0.2) },
+            Atom { atom_type: None, position: Vector::new(0.8, 0.8, 0.8) },
         ];
         let b = a.clone();
         (a, b)
