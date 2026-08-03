@@ -2,7 +2,7 @@ use crate::types::Vectors;
 
 use super::*;
 use tempfile::NamedTempFile;
-use std::{io::{ Seek, Write }, usize};
+use std::io::{ Seek, Write };
 
 #[test]
 fn test_read_config_header() {
@@ -117,8 +117,7 @@ fn test_read_xdatcar() {
         coordinate_type: Coordinates::Direct
     };
 
-    let control_read_results: Vec<ReadResult> = std::iter::repeat(control_res)
-        .take(3)
+    let control_read_results: Vec<ReadResult> = std::iter::repeat_n(control_res, 3)
         .collect();
 
     let control_res_variant = ReadResultVariant::ReadResults { res: control_read_results };

@@ -1,10 +1,12 @@
 #![allow(unused)]
 #![allow(clippy::missing_errors_doc)]
 
-pub mod prelude;
-pub mod error;
-pub mod types;
-pub mod parser;
-pub mod cell;
-pub mod geometry;
-pub mod classification;
+pub(crate)mod prelude;
+pub(crate)mod error;
+pub(crate)mod types;
+pub(crate)mod parser;
+pub(crate)mod cell;
+pub(crate)mod geometry;
+pub(crate)mod classification;
+pub(crate)mod optimization;
+pub(crate)mod observables;

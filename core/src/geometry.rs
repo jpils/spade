@@ -5,20 +5,18 @@ use crate::types::{Atom, Atoms, Matrix, UVector, Vector, Vectors};
 
 use nalgebra::{Rotation3, SVector};
 
-pub type Descriptor = SVector<f64, 18>;
-pub type Descriptors = Vec<SVector<f64, 18>>;
-pub type NN = Vec<(Atom, Vec<(Atom, f64)>)>;
+pub(crate)type NN = Vec<(Atom, Vec<(Atom, f64)>)>;
 
 #[derive(Debug, Clone)]
-pub struct NearestNeighbor {
+pub(crate)struct NearestNeighbor {
     pub(crate) reference: Atom,
     pub(crate) neighbors: Vec<(Atom, Atom, f64)>
 }
 
 /// find n nearest neighbors for atom a with positions relative to a
-pub(crate) fn n_nearest_neighbors(a: &Atoms, b: Atoms, n: usize, cell_matrix: &Matrix) -> Vec<NearestNeighbor> {
+pub(crate) fn n_nearest_neighbors(a: &Atoms, b: &Atoms, n: usize, cell_matrix: &Matrix) -> Vec<NearestNeighbor> {
     let mut distances: Vec<NearestNeighbor> = Vec::new();
-    let is_self = *a == b;
+    let is_self = *a == *b;
     for atom_a in a {
         let atom_distances = b
             .iter()
@@ -40,7 +38,7 @@ pub(crate) fn n_nearest_neighbors(a: &Atoms, b: Atoms, n: usize, cell_matrix: &M
             .collect::<Vec<_>>();
 
         let mut atom_distances = atom_distances;
-        atom_distances.sort_by(|(_, _, a), (_, _, b)| a.total_cmp(&b));
+        atom_distances.sort_by(|(_, _, a), (_, _, b)| a.total_cmp(b));
         
         let n_nearest = if is_self {
             let len = atom_distances.len().saturating_sub(1);
@@ -66,7 +64,7 @@ pub(crate) fn n_nearest_neighbors(a: &Atoms, b: Atoms, n: usize, cell_matrix: &M
     distances
 }
 
-pub fn get_displacements_between(lhs: &Atoms, rhs: &Atoms) -> Result<Vectors> {
+pub(crate)fn get_displacements_between(lhs: &Atoms, rhs: &Atoms) -> Result<Vectors> {
     if lhs.len() != rhs.len() {
         return Err(Error::SizeMismatch { expected: lhs.len(), got: rhs.len() });
     }
@@ -79,7 +77,7 @@ pub fn get_displacements_between(lhs: &Atoms, rhs: &Atoms) -> Result<Vectors> {
     Ok(displacements)
 }
 
-pub fn rotate_x_site_atoms(
+pub(crate)fn rotate_x_site_atoms(
     x_site_atoms: &mut Atoms, 
     tilt_axis_angle: (UVector, f64 /* rad */)
 ) {
@@ -92,18 +90,18 @@ pub fn rotate_x_site_atoms(
     }
 }
 
-pub fn rotate_atom(atom: &mut Atom, axis: &UVector, tilt_angle: f64) {
+pub(crate)fn rotate_atom(atom: &mut Atom, axis: &UVector, tilt_angle: f64) {
     let rot = Rotation3::from_axis_angle(axis, tilt_angle);
     atom.position = rot * atom.position;
 }
 
 #[must_use]
-pub fn compute_metric(cell_matrix: &Matrix) -> Matrix {
+pub(crate)fn compute_metric(cell_matrix: &Matrix) -> Matrix {
     cell_matrix.transpose() * cell_matrix
 }
 
 #[must_use]
-pub fn compute_x_angle(vec: &Vector) -> f64 {
+pub(crate)fn compute_x_angle(vec: &Vector) -> f64 {
     let mut angle = vec[2].atan2(vec[0]);
     if angle < 0.0 {
         angle += 2.0*PI;
@@ -113,12 +111,12 @@ pub fn compute_x_angle(vec: &Vector) -> f64 {
 
 /// minimum image convention, vec in direct coordinates
 #[must_use]
-pub fn wrap_vector(vec: &Vector) -> Vector {
+pub(crate)fn wrap_vector(vec: &Vector) -> Vector {
     vec - vec.map(|x| (x + 0.5).floor())
 }
 
 #[must_use]
-pub fn direct_to_cartesian(vec: Vector, cell_matrix: &Matrix) -> Vector {
+pub(crate)fn direct_to_cartesian(vec: Vector, cell_matrix: &Matrix) -> Vector {
     cell_matrix * vec
 }
 
@@ -134,7 +132,7 @@ mod tests {
         let cell = test_cell();
         let requested_neighbors = 3;
         
-        let nn = n_nearest_neighbors(&atoms_a, atoms_b, requested_neighbors, &cell);
+        let nn = n_nearest_neighbors(&atoms_a, &atoms_b, requested_neighbors, &cell);
         
         assert_eq!(nn.len(), atoms_a.len());
         for neighbor_data in nn {
@@ -180,12 +178,12 @@ mod tests {
     #[test]
     fn test_get_displacements_between() {
         let lhs = vec![
-            Atom { atom_type: Element::Unknown, position: Vector::new(1.0, 2.0, 3.0) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(4.0, 5.0, 6.0) },
+            Atom { atom_type: None, position: Vector::new(1.0, 2.0, 3.0) },
+            Atom { atom_type: None, position: Vector::new(4.0, 5.0, 6.0) },
         ];
         let rhs = vec![
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.5, 1.0, 1.5) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(2.0, 2.5, 3.0) },
+            Atom { atom_type: None, position: Vector::new(0.5, 1.0, 1.5) },
+            Atom { atom_type: None, position: Vector::new(2.0, 2.5, 3.0) },
         ];
 
         let displacements = get_displacements_between(&lhs, &rhs).unwrap();
@@ -197,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_get_displacements_size_mismatch() {
-        let lhs = vec![Atom { atom_type: Element::Unknown, position: Vector::zeros() }];
+        let lhs = vec![Atom { atom_type: None, position: Vector::zeros() }];
         let rhs = vec![];
 
         let result = get_displacements_between(&lhs, &rhs);
@@ -207,7 +205,7 @@ mod tests {
     #[test]
     fn test_rotate_atom() {
         let mut atom = Atom {
-            atom_type: Element::Unknown,
+            atom_type: None,
             position: Vector::new(1.0, 0.0, 0.0),
         };
         let axis = UVector::new_normalize(Vector::new(0.0, 0.0, 1.0));
@@ -222,8 +220,8 @@ mod tests {
     #[test]
     fn test_rotate_x_site_atoms() {
         let mut atoms = vec![
-            Atom { atom_type: Element::Unknown, position: Vector::new(1.0, 0.0, 0.0) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.0, 1.0, 0.0) },
+            Atom { atom_type: None, position: Vector::new(1.0, 0.0, 0.0) },
+            Atom { atom_type: None, position: Vector::new(0.0, 1.0, 0.0) },
         ];
         let axis = UVector::new_normalize(Vector::new(0.0, 0.0, 1.0));
         let angle = PI / 2.0;
@@ -271,10 +269,10 @@ mod tests {
 
     fn test_atoms() -> (Atoms, Atoms) {
         let a = vec![
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.0, 0.0, 0.0) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.5, 0.5, 0.5) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.2, 0.2, 0.2) },
-            Atom { atom_type: Element::Unknown, position: Vector::new(0.8, 0.8, 0.8) },
+            Atom { atom_type: None, position: Vector::new(0.0, 0.0, 0.0) },
+            Atom { atom_type: None, position: Vector::new(0.5, 0.5, 0.5) },
+            Atom { atom_type: None, position: Vector::new(0.2, 0.2, 0.2) },
+            Atom { atom_type: None, position: Vector::new(0.8, 0.8, 0.8) },
         ];
         let b = a.clone();
         (a, b)

@@ -1,5 +1,5 @@
 //! Crate prelude
 
-pub use crate::error::Error;
+pub(crate)use crate::error::Error;
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub(crate)type Result<T> = std::result::Result<T, Error>;

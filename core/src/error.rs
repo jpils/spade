@@ -1,5 +1,5 @@
 #[derive(thiserror::Error, Debug)]
-pub enum Error {
+pub(crate)enum Error {
     #[error("IO Error: {0}")]
     Io(#[from] std::io::Error),
 
