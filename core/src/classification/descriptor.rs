@@ -1,32 +1,44 @@
-use crate::{error::Error, geometry, parser::Parser, types::{Atom, Atoms, Matrix, ReadResultVariant, SupercellAtoms, Vector, Vectors}, geometry::NearestNeighbor};
+//! providing a method to calculate descriptors to classify domains and domain boundaries
+
+use crate::{error::Error, geometry, parser::Parser, types::{Atom, Atoms, Matrix, ReadResultVariant, SupercellAtoms, Vector, Vectors}, geometry::NearestNeighbors};
 use nalgebra::{SVector};
 
 pub(crate) type Descriptor = SVector<f64, 18>;
-pub(crate) type Descriptors = Vec<SVector<f64, 18>>;
+pub(crate) type Descriptors = Vec<Descriptor>;
 
-pub(crate) fn calculate_descriptors(mut b_b: Vec<NearestNeighbor>, b_x: Vec<NearestNeighbor>) -> Vec<(Atom, Descriptor)> {
-    let mut descriptors: Vec<(Atom, Descriptor)> = Vec::with_capacity(b_b.len());
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BbDescriptor {
+    pub(crate) descriptor: Descriptor,
+    pub(crate) reference_b_atom: Atom
+}
+
+pub(crate) type BbDescriptors = Vec<BbDescriptor>;
+
+pub(crate) fn calculate_bb_descriptors(mut b_b: Vec<NearestNeighbors>, b_x: &[NearestNeighbors]) -> BbDescriptors {
+    let mut descriptors: BbDescriptors = Vec::with_capacity(b_b.len());
     while let Some(b) = b_b.pop() {
         let current = b.reference;
-        let neighbor = b.neighbors[0].0;
+        let neighbor = b.neighbors[0].atom_abs_cart;
 
         let current_x = b_x.iter().find(|nn| nn.reference == current).unwrap();
         let neighbor_x = b_x.iter().find(|nn| nn.reference == neighbor).unwrap();
 
-        let current_desc = get_domain_descriptor(current_x.to_owned());
-        let neighbor_desc = get_domain_descriptor(neighbor_x.to_owned());
+        let current_desc = get_b_site_descriptor(current_x);
+        let neighbor_desc = get_b_site_descriptor(neighbor_x);
         let avg_desc = (current_desc + neighbor_desc)/2.0;
 
-        descriptors.push((current, avg_desc));
+        let bb_descriptor = BbDescriptor { descriptor: avg_desc, reference_b_atom: current };
+        descriptors.push(bb_descriptor);
     }
+
     descriptors
 }
 
-fn get_domain_descriptor(b_nns: NearestNeighbor) -> Descriptor {
+fn get_b_site_descriptor(b_nns: &NearestNeighbors) -> Descriptor {
     let vectors = b_nns.neighbors.iter()
-        .map(|(_, neighbor, _)| neighbor.position)
+        .map(|neighbor| neighbor.atom_rel_cart.position)
         .collect::<Vec<_>>();
-    let sorted_vectors = sort_x(vectors);
+    let sorted_vectors = sort_octahedral_vectors(&vectors);
     
     let mut arr = [0.0; 18];
     for (vec_id, vec) in sorted_vectors.into_iter().enumerate() {
@@ -39,9 +51,8 @@ fn get_domain_descriptor(b_nns: NearestNeighbor) -> Descriptor {
     Descriptor::from(arr)
 }
 
-fn sort_x(positions: Vectors) -> Vectors { // do something with the y pair
+fn sort_octahedral_vectors(positions: &Vectors) -> Vectors {
     let (y_top_id, &y_top) = positions.iter().enumerate().max_by(|a, b| a.1.y.total_cmp(&b.1.y)).unwrap();
-
     let mut positions = positions.clone();
     positions.swap_remove(y_top_id);
     let (y_bottom_id, &y_bottom) = positions.iter().enumerate().min_by(|a, b| a.1.y.total_cmp(&b.1.y)).unwrap();
@@ -60,151 +71,302 @@ fn sort_x(positions: Vectors) -> Vectors { // do something with the y pair
         .map(|(pos, _)| pos)
         .collect::<Vec<_>>();
 
-    pos.insert(0, y_top.to_owned());
-    pos.insert(1, y_bottom.to_owned());
+    pos.insert(0, y_top);
+    pos.insert(1, y_bottom);
     pos
 }
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::types::Element;
-    use std::f64::consts::PI;
+
+    const EPS: f64 = 1e-12;
+
+    fn assert_descriptor_close(actual: &Descriptor, expected: &Descriptor) {
+        assert!(
+            (actual - expected).norm() <= EPS,
+            "Expected {expected:?}, got {actual:?}"
+        );
+    }
+
+    fn assert_vector_close(actual: &Vector, expected: &Vector) {
+        assert!(
+            (actual - expected).norm() <= EPS,
+            "Expected {expected:?}, got {actual:?}"
+        );
+    }
 
     #[test]
-    fn test_sort_x_ordering() {
-        // shuffle the octahedral relative vectors arbitrarily for testing
-        let input_positions = vec![
-            Vector::new(0.0, 0.0, 0.5),   // Eq: PI/2 rad
-            Vector::new(0.0, -0.5, 0.0),  // Apical: Bottom
-            // Checking arbitrary XZ plane signs for angle computations
-            Vector::new(0.5, 0.0, 0.0),   // Eq: 0 rad
-            Vector::new(0.0, 0.5, 0.0),   // Apical: Top
-            Vector::new(0.0, 0.0, -0.5),  // Eq: 3*PI/2 rad
-            Vector::new(-0.5, 0.0, 0.0),  // Eq: PI rad
+    fn test_sort_octahedral_vectors_ordering() {
+        let positions = vec![
+            Vector::new(0.0, 0.0, 0.5),
+            Vector::new(0.0, -0.5, 0.0),
+            Vector::new(0.5, 0.0, 0.0),
+            Vector::new(0.0, 0.5, 0.0),
+            Vector::new(0.0, 0.0, -0.5),
+            Vector::new(-0.5, 0.0, 0.0),
         ];
 
-        let sorted = sort_x(input_positions);
+        let original = positions.clone();
+        let sorted = sort_octahedral_vectors(&positions);
+
+        let expected = [
+            Vector::new(0.0, 0.5, 0.0),
+            Vector::new(0.0, -0.5, 0.0),
+            Vector::new(0.5, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 0.5),
+            Vector::new(-0.5, 0.0, 0.0),
+            Vector::new(0.0, 0.0, -0.5),
+        ];
 
         assert_eq!(sorted.len(), 6);
-        
-        // 1. Verify index 0 is top apical (highest Y value)
-        assert_eq!(sorted[0], Vector::new(0.0, 0.5, 0.0));
-        
-        // 2. Verify index 1 is bottom apical (lowest Y value)
-        assert_eq!(sorted[1], Vector::new(0.0, -0.5, 0.0));
+        assert_eq!(positions, original);
 
-        // 3. Verify indexes 2..5 are sorted by their XZ-plane rotation angle ascending
-        // 0 rad -> PI/2 rad -> PI rad -> 3*PI/2 rad
-        assert_eq!(sorted[2], Vector::new(0.5, 0.0, 0.0));   // 0 rad
-        assert_eq!(sorted[3], Vector::new(0.0, 0.0, 0.5));   // PI/2 rad (Z positive, X zero)
-        assert_eq!(sorted[4], Vector::new(-0.5, 0.0, 0.0));  // PI rad
-        assert_eq!(sorted[5], Vector::new(0.0, 0.0, -0.5));  // 3*PI/2 rad
+        for (actual, expected) in sorted.iter().zip(expected.iter()) {
+            assert_vector_close(actual, expected);
+        }
     }
 
     #[test]
-    fn test_get_domain_descriptor() {
-        let nn_octahedron = create_mock_octahedron(Vector::zeros());
-        let descriptor = get_domain_descriptor(nn_octahedron);
+    fn test_sort_octahedral_vectors_independent_of_input_order() {
+        let positions = vec![
+            Vector::new(0.0, 0.5, 0.0),
+            Vector::new(0.0, -0.5, 0.0),
+            Vector::new(0.5, 0.0, 0.0),
+            Vector::new(-0.5, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 0.5),
+            Vector::new(0.0, 0.0, -0.5),
+        ];
 
-        // Vector length validation (18 elements total for 6 coordinates * 3 dimensions)
+        let expected = sort_octahedral_vectors(&positions);
+
+        for shift in 0..positions.len() {
+            let mut rotated = positions.clone();
+            rotated.rotate_left(shift);
+
+            let actual = sort_octahedral_vectors(&rotated);
+
+            for (lhs, rhs) in actual.iter().zip(&expected) {
+                assert_vector_close(lhs, rhs);
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_b_site_descriptor() {
+        let nn = create_mock_octahedron(
+            Vector::new(0.25, 0.5, 0.5),
+        );
+
+        let descriptor = get_b_site_descriptor(&nn);
+
+        let expected = Descriptor::from([
+            0.0, 0.5, 0.0,
+            0.0, -0.5, 0.0,
+            0.5, 0.0, 0.0,
+            0.0, 0.0, 0.5,
+            -0.5, 0.0, 0.0,
+            0.0, 0.0, -0.5,
+        ]);
+
         assert_eq!(descriptor.len(), 18);
-
-        // Spot-check the flattened contents after sorting:
-        // First 3 elements must belong to top apical: [0.0, 0.5, 0.0]
-        assert_eq!(descriptor[0], 0.0);
-        assert_eq!(descriptor[1], 0.5);
-        assert_eq!(descriptor[2], 0.0);
-
-        // Next 3 elements must belong to bottom apical: [0.0, -0.5, 0.0]
-        assert_eq!(descriptor[3], 0.0);
-        assert_eq!(descriptor[4], -0.5);
-        assert_eq!(descriptor[5], 0.0);
+        assert_descriptor_close(&descriptor, &expected);
     }
 
-#[test]
-    fn test_calculate_descriptors_averaging() {
-        // Establish two coordinated B-sites adjacent to each other
-        let b1_center = Vector::new(0.0, 0.0, 0.0);
-        let b2_center = Vector::new(1.0, 0.0, 0.0);
+    #[test]
+    fn test_get_b_site_descriptor_independent_of_neighbor_order() {
+        let center = Vector::new(0.25, 0.5, 0.5);
+        let b_atoms = vec![create_mock_atom(Element::Ti, center)];
 
-        let atom_b1 = create_mock_atom(Element::Ti, b1_center);
-        let atom_b2 = create_mock_atom(Element::Ti, b2_center);
+        let mut x_atoms = create_mock_oxygen_shell(
+            center,
+            Vector::zeros(),
+        );
 
-        // 1. Build B-B linkages (Who is whose neighbor)
-        let b_b_pair = vec![
-            NearestNeighbor {
-                reference: atom_b1.clone(),
-                neighbors: vec![(atom_b2.clone(), atom_b2.clone(), 1.0)],
-            },
-            NearestNeighbor {
-                reference: atom_b2.clone(),
-                neighbors: vec![(atom_b1.clone(), atom_b1.clone(), 1.0)],
-            }
-        ];
+        let original = geometry::n_nearest_neighbors(
+            &b_atoms,
+            &x_atoms,
+            6,
+            &test_cell(),
+        );
 
-        // 2. Build local Anion contexts (X networks)
-        // To ensure the descriptors evaluate to different values, we distort the 
-        // neighbor relative coordinates *without* altering the root reference center.
-        let distortion = Vector::new(0.0, 0.1, 0.0);
-        let mut distorted_octahedron = create_mock_octahedron(b2_center);
-        for (_, rel_atom, _) in distorted_octahedron.neighbors.iter_mut() {
-            rel_atom.position += distortion;
-        }
+        x_atoms.reverse();
 
-        let b_x_pair = vec![
-            create_mock_octahedron(b1_center),
-            distorted_octahedron.clone(),
-        ];
+        let reversed = geometry::n_nearest_neighbors(
+            &b_atoms,
+            &x_atoms,
+            6,
+            &test_cell(),
+        );
 
-        let results = calculate_descriptors(b_b_pair, b_x_pair);
+        let expected = get_b_site_descriptor(&original[0]);
+        let actual = get_b_site_descriptor(&reversed[0]);
 
-        assert_eq!(results.len(), 2);
-
-        // Extract individual independent descriptors to manually calculate the ground truth
-        let desc_b1 = get_domain_descriptor(create_mock_octahedron(b1_center));
-        let desc_b2 = get_domain_descriptor(distorted_octahedron);
-        let expected_average_desc = (desc_b1 + desc_b2) / 2.0;
-
-        for (mapped_atom, computed_desc) in results {
-            if mapped_atom.position == b1_center {
-                assert!((computed_desc - expected_average_desc).norm() < 1e-12);
-            } else if mapped_atom.position == b2_center {
-                assert!((computed_desc - expected_average_desc).norm() < 1e-12);
-            } else {
-                panic!("Encountered unknown structural mapping reference point!");
-            }
-        }
+        assert_descriptor_close(&actual, &expected);
     }
 
-    fn create_mock_atom(element: Element, pos: Vector) -> Atom {
+    #[test]
+    fn test_calculate_bb_link_descriptors_averaging() {
+        let b1_position = Vector::new(0.2, 0.5, 0.5);
+        let b2_position = Vector::new(0.7, 0.5, 0.5);
+
+        let b_atoms = vec![
+            create_mock_atom(Element::Ti, b1_position),
+            create_mock_atom(Element::Ti, b2_position),
+        ];
+
+        let mut x_atoms = create_mock_oxygen_shell(
+            b1_position,
+            Vector::zeros(),
+        );
+
+        x_atoms.extend(create_mock_oxygen_shell(
+            b2_position,
+            Vector::new(0.0, 0.01, 0.0),
+        ));
+
+        let cell = test_cell();
+
+        let b_b = geometry::n_nearest_neighbors(
+            &b_atoms,
+            &b_atoms,
+            1,
+            &cell,
+        );
+
+        let b_x = geometry::n_nearest_neighbors(
+            &b_atoms,
+            &x_atoms,
+            6,
+            &cell,
+        );
+
+        let descriptors = calculate_bb_descriptors(b_b, &b_x);
+
+        assert_eq!(descriptors.len(), 2);
+
+        let expected = Descriptor::from([
+            0.0, 0.45, 0.0,
+            0.0, -0.55, 0.0,
+            0.5, -0.05, 0.0,
+            0.0, -0.05, 0.5,
+            -0.5, -0.05, 0.0,
+            0.0, -0.05, -0.5,
+        ]);
+
+        for result in &descriptors {
+            assert_descriptor_close(&result.descriptor, &expected);
+        }
+
+        let b1_cart = geometry::direct_to_cartesian(
+            b1_position,
+            &cell,
+        );
+
+        let b2_cart = geometry::direct_to_cartesian(
+            b2_position,
+            &cell,
+        );
+
+        assert!(descriptors.iter().any(|desc| {
+            (desc.reference_b_atom.position - b1_cart).norm() <= EPS
+        }));
+
+        assert!(descriptors.iter().any(|desc| {
+            (desc.reference_b_atom.position - b2_cart).norm() <= EPS
+        }));
+    }
+
+    #[test]
+    fn test_calculate_bb_descriptors_empty_input() {
+        let b_b: Vec<NearestNeighbors> = Vec::new();
+        let b_x: Vec<NearestNeighbors> = Vec::new();
+
+        let result = calculate_bb_descriptors(b_b, &b_x);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_get_b_site_descriptor_rejects_empty_neighbors() {
+        let b_atoms = vec![
+            create_mock_atom(
+                Element::Ti,
+                Vector::new(0.25, 0.5, 0.5),
+            ),
+        ];
+
+        let x_atoms: Atoms = Vec::new();
+
+        let nn = geometry::n_nearest_neighbors(
+            &b_atoms,
+            &x_atoms,
+            0,
+            &test_cell(),
+        );
+
+        get_b_site_descriptor(&nn[0]);
+    }
+
+    fn create_mock_atom(element: Element, position: Vector) -> Atom {
         Atom {
-            atom_type: element,
-            position: pos,
+            atom_type: Some(element),
+            position,
         }
     }
 
-    fn create_mock_octahedron(reference_pos: Vector) -> NearestNeighbor {
-        let reference = create_mock_atom(Element::Ti, reference_pos);
-        
-        let rel_positions = vec![
-            Vector::new(0.0, 0.5, 0.0),   // Top apical (y-high)
-            Vector::new(0.0, -0.5, 0.0),  // Bottom apical (y-low)
-            Vector::new(0.5, 0.0, 0.0),   // Equatorial (0 rad)
-            Vector::new(0.0, 0.0, 0.5),   // Equatorial (PI/2 rad)
-            Vector::new(-0.5, 0.0, 0.0),  // Equatorial (PI rad)
-            Vector::new(0.0, 0.0, -0.5),  // Equatorial (3*PI/2 rad)
+    fn create_mock_oxygen_shell(
+        center: Vector,
+        distortion: Vector,
+    ) -> Atoms {
+        let offsets = [
+            Vector::new(0.0, 0.05, 0.0),
+            Vector::new(0.0, -0.05, 0.0),
+            Vector::new(0.05, 0.0, 0.0),
+            Vector::new(0.0, 0.0, 0.05),
+            Vector::new(-0.05, 0.0, 0.0),
+            Vector::new(0.0, 0.0, -0.05),
         ];
 
-        let neighbors = rel_positions
+        offsets
             .into_iter()
-            .map(|rel_pos| {
-                let abs_atom = create_mock_atom(Element::O, reference_pos + rel_pos);
-                let rel_atom = create_mock_atom(Element::O, rel_pos);
-                (abs_atom, rel_atom, 0.25)
+            .map(|offset| {
+                create_mock_atom(
+                    Element::O,
+                    center + offset + distortion,
+                )
             })
-            .collect::<Vec<_>>();
+            .collect()
+    }
 
-        NearestNeighbor { reference, neighbors }
+    fn create_mock_octahedron(
+        reference_position: Vector,
+    ) -> NearestNeighbors {
+        let b_atoms = vec![
+            create_mock_atom(Element::Ti, reference_position),
+        ];
+
+        let x_atoms = create_mock_oxygen_shell(
+            reference_position,
+            Vector::zeros(),
+        );
+
+        let mut nn = geometry::n_nearest_neighbors(
+            &b_atoms,
+            &x_atoms,
+            6,
+            &test_cell(),
+        );
+
+        nn.remove(0)
+    }
+
+    fn test_cell() -> Matrix {
+        Matrix::from_diagonal(
+            &Vector::new(10.0, 10.0, 10.0),
+        )
     }
 }
