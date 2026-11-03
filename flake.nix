@@ -12,9 +12,11 @@
 		};
 
 		crane.url = "github:ipetkov/crane";
+
+		pi.url = "github:earendil-works/pi";
 	};
 
-	outputs = { self, nixpkgs, flake-utils, fenix, crane, ... }:
+	outputs = { self, nixpkgs, flake-utils, fenix, crane, pi, ... }:
 		flake-utils.lib.eachDefaultSystem (system:
 			let
 				pkgs = import nixpkgs { inherit system; };
@@ -50,6 +52,7 @@
 					packages = [
 						toolchain
 						pkgs.bacon
+						pi.packages.${system}.default
 					];
 
 					# Helps rust-analyzer find std sources
