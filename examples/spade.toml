@@ -1,0 +1,39 @@
+[io]
+file = "XDATCAR"
+format = "xdatcar"
+out_dir = "res"
+
+[cell]
+geometry = "cubic"
+dw_type = "HT"
+lattice_constant = 3.905
+elements = ["Sr", "Ti", "O"]
+
+[analysis.fitting]
+step_size = 1e-5
+max_iter = 100
+
+[analysis.statistics]
+blocks = 20
+
+[observables]
+observables = ["op", "polarization"]
+
+[observables.polarization]
+bec_a = [
+    [2.56, 0.0, 0.0],
+    [0.0, 2.56, 0.0],
+    [0.0, 0.0, 2.56],
+]
+
+bec_b = [
+    [7.2, 0.0, 0.0],
+    [0.0, 7.2, 0.0],
+    [0.0, 0.0, 7.2],
+]
+
+bec_x = [
+    [-2.1, 0.0, 0.0],
+    [0.0, -5.7, 0.0],
+    [0.0, 0.0, -2.1],
+]
