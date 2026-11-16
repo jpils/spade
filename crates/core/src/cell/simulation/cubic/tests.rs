@@ -1,5 +1,5 @@
 use super::*;
-use crate::{cell::{self, CellGeometry, UnitCellOps, reference::RefCellBuilder}, types::{AsVector, Atom, CartAtom, CartAtoms, Cartesian, Direct, DirectAtoms, Element, Elements, RotationVariant, UQuaternion}};
+use crate::{cell::{self, CellGeometry, UnitCellOps, reference::RefCellBuilder}, types::{AsVector, Atom, CartAtom, CartAtoms, Cartesian, Direct, DirectAtoms, Element, Elements, PermutationVariant, UQuaternion}};
 use nalgebra::Unit;
 use std::f64::consts::PI;
 
@@ -225,7 +225,7 @@ fn get_reference() -> UnitCell {
         .elements(elements)
         .geometry(geometry)
         .lattice_constant(a)
-        .rotation_variant(RotationVariant::R0)
+        .rotation_variant(PermutationVariant::R0)
         .build()
         .unwrap();
     

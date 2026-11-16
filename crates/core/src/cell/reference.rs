@@ -1,11 +1,11 @@
-use std::cell::Ref;
+use std::cell::{self, Ref};
 
-use crate::{cell::{AsUnitCell, UnitCellOps}, geometry, prelude::*, types::{CartAtoms, Cartesian, RotationVariant}};
+use crate::{cell::{AsUnitCell, UnitCellOps}, geometry, prelude::*, types::{CartAtoms, Cartesian, PermutationVariant}};
 use super::{CellGeometry, Elements, UVector, UnitCell, Error, Vector, UnitCellAtoms, Atoms, Atom};
 
 pub struct RefCell {
     pub unit_cell: UnitCell,
-    pub variant: RotationVariant
+    pub variant: PermutationVariant
 }
 
 impl AsUnitCell for RefCell {
@@ -61,7 +61,7 @@ pub struct RefCellBuilder {
     elements: Option<Elements>,
     tilt_angle: Option<f64>,
     tilt_axis: Option<UVector>,
-    rotation_variant: Option<RotationVariant>
+    permutation_variant: Option<PermutationVariant>
 }
 
 impl RefCellBuilder {
@@ -95,8 +95,8 @@ impl RefCellBuilder {
         self
     }
 
-    pub fn rotation_variant(&mut self, rotation_variant: RotationVariant) -> &mut Self {
-        self.rotation_variant = Some(rotation_variant);
+    pub fn rotation_variant(&mut self, rotation_variant: PermutationVariant) -> &mut Self {
+        self.permutation_variant = Some(rotation_variant);
         self
     }
 
@@ -118,7 +118,7 @@ impl RefCellBuilder {
             .ok_or_else(|| Error::Generic("Lattice constant is not set".into()))?;
         let elements = self.elements.as_ref()
             .ok_or_else(|| Error::Generic("Elements are not set".into()))?; 
-        let rotation_variant = self.rotation_variant
+        let rotation_variant = self.permutation_variant
             .ok_or_else(|| Error::Generic("Rotation variant not specified".into()))?;
         let tilt_angle = self.tilt_angle.unwrap_or(0.0);
 
@@ -146,7 +146,7 @@ impl RefCellBuilder {
             geometry,
             lattice_constant, 
             elements,
-            rotation_variant,
+            permutation_variant: rotation_variant,
             tilt_axis_angle: self.tilt_axis.zip(Some(tilt_angle))
         };
 
@@ -159,22 +159,24 @@ struct BuildContext<'a> {
     geometry: CellGeometry,
     lattice_constant: f64, 
     elements: &'a Elements,
-    rotation_variant: RotationVariant,
+    permutation_variant: PermutationVariant,
     tilt_axis_angle: Option<(UVector, f64)>,
 }
 
 fn build_cubic(ctx: BuildContext) -> RefCell {
     let mut cell_atoms = get_cubic_ref_atoms(ctx.lattice_constant, ctx.elements);
-    
+
     if let Some(axis_angle) = ctx.tilt_axis_angle {
         geometry::rotate_x_site_atoms(&mut cell_atoms.x, axis_angle);
     }
+
+    apply_rotation_variant(&mut cell_atoms, ctx.permutation_variant);
 
     let uc = UnitCell { cell_atoms, center_of_mass: Cartesian::new(Vector::zeros()) };
 
     RefCell {
         unit_cell: uc,
-        variant: ctx.rotation_variant
+        variant: ctx.permutation_variant
     }
 }
 
@@ -216,6 +218,18 @@ fn get_cubic_ref_atoms(
     ];
 
     UnitCellAtoms { a: a_site_atoms, b: b_site_atoms, x: x_site_atoms }
+}
+
+fn apply_rotation_variant(unit_cell: &mut UnitCellAtoms, rotation_variant: PermutationVariant) {
+    let shift = match rotation_variant {
+        PermutationVariant::R0 => 0,
+        PermutationVariant::R90 => 1,
+        PermutationVariant::R180 => 2,
+        PermutationVariant::R270 => 3
+    };
+
+    unit_cell.a[0..4].rotate_left(shift);
+    unit_cell.a[4..8].rotate_left(shift);
 }
 
 fn get_tetragonal_atoms() -> Result<UnitCellAtoms> {

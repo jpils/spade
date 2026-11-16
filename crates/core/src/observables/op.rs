@@ -74,7 +74,7 @@ pub fn calculate_op<'a>(spec: &OpSpec, ctx: &'a OpCtx) -> Result<Vec<(&'a Fitted
     Ok(res)
 }
 
-fn phase_factors(b_nearest_neighbors: &[NearestNeighbors]) -> Result<Vec<PhaseFactor>> {
+pub fn phase_factors(b_nearest_neighbors: &[NearestNeighbors]) -> Result<Vec<PhaseFactor>> {
     if b_nearest_neighbors.is_empty() {
         return Err(Error::Generic("b_nearest_neighbors is is_empty".into()));
     }

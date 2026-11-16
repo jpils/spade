@@ -4,7 +4,7 @@ use crate::args::AnalyzeArgs;
 use crate::config::ConfigSpec;
 
 use anyhow::{Context, Error, Ok, Result};
-use spade_core::{cell::{AsUnitCell, CellGeometry, simulation::{SimCell, SimCellBuilder}}, classification::{descriptor::{BbDescriptor, BbDescriptors, calculate_bb_descriptors}, kmeans::{Clusters, descriptor_closest_to_center, k_means}}, geometry::{self, NearestNeighbors, cartesian_to_direct, n_nearest_neighbors}, parser::Parser, types::{AsVector, Atom, Atoms, CartAtom, CartAtoms, Cartesian, CoordinatesType, DWType, Direct, DirectAtom, DirectAtoms, Elements, Matrix, ReadResult, SupercellAtoms, Vectors}};
+use spade_core::{cell::{AsUnitCell, CellGeometry, simulation::{FittedSimCell, SimCell, SimCellBuilder}}, classification::{descriptor::{BDescriptor, BbDescriptors, calculate_descriptors}, kmeans::{Clusters, descriptor_closest_to_center, k_means}}, geometry::{self, NearestNeighbors, cartesian_to_direct, n_nearest_neighbors}, parser::Parser, types::{AsVector, Atom, Atoms, CartAtom, CartAtoms, Cartesian, CoordinatesType, DWType, Direct, DirectAtom, DirectAtoms, Elements, Matrix, ReadResult, SupercellAtoms, Vectors}};
 
 pub(crate) fn run(spec: &ConfigSpec, args: &AnalyzeArgs) -> Result<()> {
     let data = read_data(&spec.io.file, spec.io.format)?;
@@ -31,11 +31,18 @@ pub(crate) fn run(spec: &ConfigSpec, args: &AnalyzeArgs) -> Result<()> {
             spec.cell.dw_type
         )?;
 
-        let domain_seeds = find_domain_seeds(
+        let domain_seed_ids = find_domain_seeds_ids(
             &nearest_neighbors.b_b_nns, 
             &nearest_neighbors.b_x_nns,
             &sim_cells,
             spec.analysis.fitting.n_clusters.unwrap_or(2)
+        )?;
+
+        let fitted_cells = fit_sim_cells(
+            sim_cells, 
+            domain_seed_ids, 
+            spec.cell.geometry, 
+            spec.cell.dw_type
         )?;
     }
 
@@ -174,33 +181,89 @@ fn grouped_uc_atoms(
         .collect::<Result<Vec<_>>>()
 }
 
-fn find_domain_seeds<'a>(
+fn find_domain_seeds_ids(
     b_b_nns: &Vec<NearestNeighbors>,
     b_x_nns: &Vec<NearestNeighbors>,
-    sim_cells: &'a Vec<SimCell>,
+    sim_cells: &Vec<SimCell>,
     n_clusters: usize
-) -> Result<Vec<&'a SimCell>> {
+) -> Result<Vec<usize>> {
 
-    let bb_descriptors = calculate_bb_descriptors(b_b_nns, b_x_nns)?;
+    let bb_descriptors = calculate_descriptors(b_b_nns, b_x_nns)?;
     let clusters = k_means(&bb_descriptors, n_clusters);
 
-    let cluster_centers = clusters.iter()
-        .map(|cluster| descriptor_closest_to_center(&cluster.bb_descriptors))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    cluster_centers.iter()
-        .map(|&center| find_cell_to_descriptor(sim_cells, center) )
+    // change to x values instead
+    let bulk_bounds = clusters.iter()
+        .map(|cluster| {
+            let (min_id, _) = cluster.bb_descriptors.iter()
+                .enumerate()
+                .min_by(|a, b| 
+                    a.1.reference_b_atom.position.as_vector().x.total_cmp(
+                    &b.1.reference_b_atom.position.as_vector().x)
+                )?;
+            let (max_id, _) = cluster.bb_descriptors.iter()
+                .enumerate()
+                .max_by(|a, b| 
+                    a.1.reference_b_atom.position.as_vector().x.total_cmp(
+                    &b.1.reference_b_atom.position.as_vector().x)
+                )?;
+            Some((min_id, max_id))
+        })
         .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| anyhow::Error::msg("Failed to find matching simulation cell"))
+        .ok_or_else(|| anyhow::anyhow!("Clusters are empty"));
+
+    // find uc in the center of this
+    todo!()
 }
 
-fn find_cell_to_descriptor<'a>(
-    sim_cells: &'a Vec<SimCell>, 
-    descriptor: &BbDescriptor
-) -> Option<&'a SimCell> {
+fn find_cell_id_to_descriptor(
+    sim_cells: &Vec<SimCell>, 
+    descriptor: &BDescriptor
+) -> Option<usize> {
 
     sim_cells.iter()
-        .find(|&cell| 
+        .position(|cell| 
             cell.as_unit_cell().cell_atoms.b[0] == descriptor.reference_b_atom
         )
+}
+
+fn fit_sim_cells(
+    sim_cells: Vec<SimCell>, 
+    seeds_ids: Vec<usize>, 
+    geometry: CellGeometry,
+    dw_type: DWType
+) -> Result<Vec<FittedSimCell>> {
+
+    match geometry {
+        CellGeometry::Cubic => fit_cubic_sim_cells(sim_cells, seeds_ids, dw_type),
+        CellGeometry::Tetragonal => todo!()
+    };
+
+    todo!()
+}
+
+fn fit_cubic_sim_cells(
+    sim_cells: Vec<SimCell>, 
+    seeds_ids: Vec<usize>,
+    dw_type: DWType
+) -> Result<FittedSimCell> {
+    
+    match dw_type {
+        DWType::HT => fit_cubic_ht(sim_cells, seeds_ids),
+        DWType::HH => fit_cubic_hh(sim_cells, seeds_ids),
+        DWType::Apb => fit_cubic_apb(sim_cells, seeds_ids)
+    };
+    
+    todo!()
+}
+
+fn fit_cubic_ht(sim_cells: Vec<SimCell>, seeds_ids: Vec<usize>) {
+    todo!()
+}
+
+fn fit_cubic_hh(sim_cells: Vec<SimCell>, seeds_ids: Vec<usize>) {
+    todo!()
+}
+
+fn fit_cubic_apb(sim_cells: Vec<SimCell>, seeds_ids: Vec<usize>) {
+    todo!()
 }

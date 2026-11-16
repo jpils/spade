@@ -1,5 +1,5 @@
 use crate::{classification::descriptor, types::{Atom, CartAtom, Cartesian}};
-use super::descriptor::{Descriptor, Descriptors, BbDescriptor, BbDescriptors};
+use super::descriptor::{Descriptor, Descriptors, BDescriptor, BbDescriptors};
 use crate::prelude::*;
 use rand::seq::{IteratorRandom};
 
@@ -54,7 +54,7 @@ pub fn k_means(data: &BbDescriptors, n_clusters: usize) -> Clusters {
 }
 
 #[allow(clippy::cast_precision_loss)]
-pub fn descriptor_closest_to_center(cluster: &BbDescriptors) -> Result<&BbDescriptor> {
+pub fn descriptor_closest_to_center(cluster: &BbDescriptors) -> Result<&BDescriptor> {
     let centroid = cluster
         .iter()
         .fold(Descriptor::zeros(), |acc, &point| acc + point.descriptor);
@@ -114,7 +114,7 @@ mod tests {
         let point = uniform_descriptor(1.0);
         let centroids = vec![
             uniform_descriptor(1.0), // Distance should be 0
-            uniform_descriptor(2.0), // Distance: 18 dimensions * (1.0 - 2.0)^2 = 18.0
+            uniform_descriptor(2.0), // Distance: 2 dimensions * (1.0 - 2.0)^2 = 2.0
         ];
 
         let (returned_point, distances) = calculate_dist(&point, &centroids);
@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(returned_point, &point);
         assert_eq!(distances.len(), 2);
         assert!((distances[0] - 0.0).abs() < 1e-12);
-        assert!((distances[1] - 18.0).abs() < 1e-12);
+        assert!((distances[1] - 2.0).abs() < 1e-12);
     }
 
     #[test]
@@ -184,7 +184,7 @@ mod tests {
             uniform_descriptor(1.0) + Descriptor::from_element(1e-8), 
             uniform_descriptor(5.0),
         ];
-        // 18 elements * (1e-8)^2 = 1.8e-15, which is < 1e-12
+        // 2 elements * (1e-8)^2 = 2e-16, which is < 1e-12
         assert!(converged(&c1, &c3));
 
         // Outside threshold
@@ -239,8 +239,8 @@ mod tests {
         Descriptor::from_element(val)
     }
 
-    fn bb_descriptor(val: f64) -> BbDescriptor {
-        BbDescriptor {
+    fn bb_descriptor(val: f64) -> BDescriptor {
+        BDescriptor {
             descriptor: uniform_descriptor(val),
             reference_b_atom: Atom {
                 atom_type: Some(Element::Ti),
@@ -249,8 +249,8 @@ mod tests {
         }
     }
 
-    fn bb_structured_descriptor(x: f64, y: f64, z: f64) -> BbDescriptor {
-        BbDescriptor {
+    fn bb_structured_descriptor(x: f64, y: f64, z: f64) -> BDescriptor {
+        BDescriptor {
             descriptor: structured_descriptor(x, y, z),
             reference_b_atom: Atom {
                 atom_type: Some(Element::Ti),
@@ -259,13 +259,7 @@ mod tests {
         }
     }
 
-    fn structured_descriptor(x: f64, y: f64, z: f64) -> Descriptor {
-        let mut arr = [0.0; 18];
-        for i in 0..6 {
-            arr[i * 3] = x;
-            arr[i * 3 + 1] = y;
-            arr[i * 3 + 2] = z;
-        }
-        Descriptor::from(arr)
+    fn structured_descriptor(x: f64, y: f64, _z: f64) -> Descriptor {
+        Descriptor::from([x, y])
     }
 }

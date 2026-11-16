@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use super::*;
-use crate::types::{AsVector, Element, Elements, RotationVariant};
+use crate::types::{AsVector, Element, Elements, PermutationVariant};
 
 #[test]
 fn test_build_no_tilts() {
@@ -264,7 +264,7 @@ struct Context {
     elements: Elements,
     tilt_angle: f64,
     tilt_axis: UVector,
-    rotation_variant: RotationVariant,
+    rotation_variant: PermutationVariant,
 }
 
 impl Context {
@@ -275,7 +275,7 @@ impl Context {
             elements: vec![Element::Sr, Element::Ti, Element::O],
             tilt_angle: PI/2.0,
             tilt_axis: UVector::new_normalize(Vector::new(0.0, 0.0, 1.0)),
-            rotation_variant: RotationVariant::R0,
+            rotation_variant: PermutationVariant::R0,
         }
     }
 
@@ -286,7 +286,7 @@ impl Context {
             elements: vec![Element::Sr, Element::Ti, Element::O],
             tilt_angle: PI/2.0,
             tilt_axis: UVector::new_normalize(Vector::new(0.0, 0.0, 1.0)),
-            rotation_variant: RotationVariant::R0,
+            rotation_variant: PermutationVariant::R0,
         }
     }
 }

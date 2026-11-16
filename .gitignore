@@ -1,2 +1,3 @@
 target/*
 .direnv/* 
+example/spade_twin_kmeans_demo/*

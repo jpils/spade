@@ -198,7 +198,7 @@ mod tests {
     use super::*;
     use crate::{
         cell::{reference::{RefCell, RefCellBuilder}, simulation::SimCell, CellGeometry},
-        types::{AtomDisplacements, CartAtom, Cartesian, Element, RotationVariant, Vector},
+        types::{AtomDisplacements, CartAtom, Cartesian, Element, PermutationVariant, Vector},
     };
     use nalgebra::Unit;
     use std::f64::consts::FRAC_PI_6;
@@ -411,7 +411,7 @@ mod tests {
             .geometry(CellGeometry::Cubic)
             .lattice_constant(1.0)
             .elements(vec![Element::Sr, Element::Ti, Element::O])
-            .rotation_variant(RotationVariant::R0)
+            .rotation_variant(PermutationVariant::R0)
             .build()
             .unwrap()
     }
