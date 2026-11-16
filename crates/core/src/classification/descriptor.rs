@@ -1,57 +1,77 @@
 //! providing a method to calculate descriptors to classify domains and domain boundaries
+use crate::cell::simulation::SimCell;
+use crate::observables::op::phase_factors;
 use crate::prelude::*;
+use crate::types::PhaseFactor;
 use crate::{error::Error, geometry::{self, NearestNeighbors}, parser::Parser, types::{AsVector, Atom, Atoms, CartAtom, Cartesian, Matrix, SupercellAtoms, Vector, Vectors}};
 use nalgebra::{SVector};
 
-pub type Descriptor = SVector<f64, 18>;
+pub type Descriptor = SVector<f64, 2>;
 pub type Descriptors = Vec<Descriptor>;
 
 #[derive(Clone, Copy, Debug)]
-pub struct BbDescriptor {
+pub struct BDescriptor {
     pub descriptor: Descriptor,
     pub reference_b_atom: CartAtom
 }
 
-pub type BbDescriptors = Vec<BbDescriptor>;
+#[derive(Clone, Debug)]
+pub struct DescribedCell {
+    pub b_descriptor: BDescriptor,
+    pub cell: SimCell
+}
 
-pub fn calculate_bb_descriptors(mut b_b: &[NearestNeighbors], b_x: &[NearestNeighbors]) -> Result<BbDescriptors> {
-    let mut descriptors: BbDescriptors = Vec::with_capacity(b_b.len());
-    for b in b_b {
+pub type BDescriptors = Vec<BDescriptor>;
+
+pub fn calculate_descriptors(
+    b_b: &[NearestNeighbors],
+    b_x: &[NearestNeighbors]
+) -> Result<BDescriptors> {
+
+    if b_b.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let phase_factors = phase_factors(b_b)?;
+    let mut descriptors: BDescriptors = Vec::with_capacity(b_b.len());
+
+    for (b, phase_factor) in b_b.iter().zip(phase_factors) {
         let current = b.reference;
-        let neighbor = b.neighbors[0].atom_abs;
 
         let current_x = b_x.iter().find(|nn| nn.reference == current).unwrap();
-        let neighbor_x = b_x.iter().find(|nn| nn.reference == neighbor).unwrap();
 
-        let current_desc = get_b_site_descriptor(current_x)?;
-        let neighbor_desc = get_b_site_descriptor(neighbor_x)?;
-        let avg_desc = (current_desc + neighbor_desc)/2.0;
+        let current_desc = get_b_site_descriptor(current_x, phase_factor)?;
 
-        let bb_descriptor = BbDescriptor { descriptor: avg_desc, reference_b_atom: current };
+        let bb_descriptor = BDescriptor { descriptor: current_desc, reference_b_atom: current };
         descriptors.push(bb_descriptor);
     }
 
     Ok(descriptors)
 }
 
-fn get_b_site_descriptor(b_nns: &NearestNeighbors) -> Result<Descriptor> {
-    let vectors = b_nns.neighbors.iter()
+fn get_b_site_descriptor(
+    b_x_nns: &NearestNeighbors,
+    phase_factor: PhaseFactor
+) -> Result<Descriptor> {
+    let vectors = b_x_nns.neighbors.iter()
         .map(|neighbor| neighbor.atom_rel.position)
         .collect::<Vec<_>>();
-    let sorted_vectors = sort_octahedral_vectors(&vectors)?;
-    
-    let mut arr = [0.0; 18];
-    for (vec_id, vec) in sorted_vectors.into_iter().enumerate() {
-        let arr_id = vec_id * 3;
-        arr[arr_id] = vec.as_vector().x;
-        arr[arr_id + 1] = vec.as_vector().y;
-        arr[arr_id + 2] = vec.as_vector().z;
-    }
+    let oy_pair = get_oy_pair(&vectors)?;
 
-    Ok(Descriptor::from(arr))
+    let ry = (oy_pair.0 - oy_pair.1);
+    let ry = ry.as_vector();
+
+    let phase_factor = phase_factor.try_to_int()?;
+
+    let dx = (ry.x + ry.z) * phase_factor as f64;
+    let dy = (ry.x - ry.z) * phase_factor as f64;
+
+    let desc = [dx, dy];
+
+    Ok(Descriptor::from(desc))
 }
 
-fn sort_octahedral_vectors(positions: &Vec<Cartesian>) -> Result<Vec<Cartesian>> {
+fn get_oy_pair(positions: &Vec<Cartesian>) -> Result<(Cartesian, Cartesian)> {
     let (y_top_id, &y_top) = positions.iter()
         .enumerate()
         .max_by(|a, b| a.1.as_vector().y.total_cmp(&b.1.as_vector().y))
@@ -65,24 +85,8 @@ fn sort_octahedral_vectors(positions: &Vec<Cartesian>) -> Result<Vec<Cartesian>>
         .ok_or_else(|| Error::Generic("Comparison of octahedral positions failed!".into()))?;
     positions.swap_remove(y_bottom_id);
 
-    let mut pos_angle = positions.into_iter()
-        .map(|pos| {
-           let angle = geometry::compute_x_angle(&pos);
-           (pos, angle)
-        })
-        .collect::<Vec<_>>();
-
-    pos_angle.sort_by(|a, b| a.1.total_cmp(&b.1));
-    
-    let mut pos = pos_angle.into_iter()
-        .map(|(pos, _)| pos)
-        .collect::<Vec<_>>();
-
-    pos.insert(0, y_top);
-    pos.insert(1, y_bottom);
-    Ok(pos)
+    Ok((y_top, y_bottom))
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -106,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sort_octahedral_vectors_ordering() {
+    fn test_get_oy_pair_ordering() {
         let positions = vec![
             Vector::new(0.0, 0.0, 0.5),
             Vector::new(0.0, -0.5, 0.0),
@@ -118,27 +122,15 @@ mod tests {
 
         let positions: Vec<Cartesian> = positions.into_iter().map(Cartesian::new).collect();
         let original = positions.clone();
-        let sorted = sort_octahedral_vectors(&positions).unwrap();
+        let (top, bottom) = get_oy_pair(&positions).unwrap();
 
-        let expected = [
-            Vector::new(0.0, 0.5, 0.0),
-            Vector::new(0.0, -0.5, 0.0),
-            Vector::new(0.5, 0.0, 0.0),
-            Vector::new(0.0, 0.0, 0.5),
-            Vector::new(-0.5, 0.0, 0.0),
-            Vector::new(0.0, 0.0, -0.5),
-        ];
-
-        assert_eq!(sorted.len(), 6);
         assert_eq!(positions, original);
-
-        for (actual, expected) in sorted.iter().zip(expected.iter()) {
-            assert_vector_close(actual.as_vector(), expected);
-        }
+        assert_vector_close(top.as_vector(), &Vector::new(0.0, 0.5, 0.0));
+        assert_vector_close(bottom.as_vector(), &Vector::new(0.0, -0.5, 0.0));
     }
 
     #[test]
-    fn test_sort_octahedral_vectors_independent_of_input_order() {
+    fn test_get_oy_pair_independent_of_input_order() {
         let positions = vec![
             Vector::new(0.0, 0.5, 0.0),
             Vector::new(0.0, -0.5, 0.0),
@@ -149,17 +141,16 @@ mod tests {
         ];
 
         let positions: Vec<Cartesian> = positions.into_iter().map(Cartesian::new).collect();
-        let expected = sort_octahedral_vectors(&positions).unwrap();
+        let expected = get_oy_pair(&positions).unwrap();
 
         for shift in 0..positions.len() {
             let mut rotated = positions.clone();
             rotated.rotate_left(shift);
 
-            let actual = sort_octahedral_vectors(&rotated).unwrap();
+            let actual = get_oy_pair(&rotated).unwrap();
 
-            for (lhs, rhs) in actual.iter().zip(&expected) {
-                assert_vector_close(lhs.as_vector(), rhs.as_vector());
-            }
+            assert_vector_close(actual.0.as_vector(), expected.0.as_vector());
+            assert_vector_close(actual.1.as_vector(), expected.1.as_vector());
         }
     }
 
@@ -169,19 +160,51 @@ mod tests {
             Vector::new(0.25, 0.5, 0.5),
         );
 
-        let descriptor = get_b_site_descriptor(&nn).unwrap();
+        let descriptor = get_b_site_descriptor(&nn, PhaseFactor::Positive).unwrap();
 
-        let expected = Descriptor::from([
-            0.0, 0.5, 0.0,
-            0.0, -0.5, 0.0,
-            0.5, 0.0, 0.0,
-            0.0, 0.0, 0.5,
-            -0.5, 0.0, 0.0,
-            0.0, 0.0, -0.5,
-        ]);
+        let expected = Descriptor::from([0.0, 0.0]);
 
-        assert_eq!(descriptor.len(), 18);
+        assert_eq!(descriptor.len(), 2);
         assert_descriptor_close(&descriptor, &expected);
+    }
+
+    #[test]
+    fn test_get_b_site_descriptor_tilted_oy_pair() {
+        for (x, z, expected) in [
+            (0.2, 0.1, [0.6, 0.2]),
+            (0.1, 0.2, [0.6, -0.2]),
+            (0.2, -0.1, [0.2, 0.6]),
+        ] {
+            let mut nn = create_mock_octahedron(Vector::new(0.25, 0.5, 0.5));
+            for neighbor in &mut nn.neighbors {
+                let position = *neighbor.atom_rel.position.as_vector();
+                if position.y.abs() > 0.3 {
+                    let sign = position.y.signum();
+                    neighbor.atom_rel.position = Cartesian::new(
+                        position + Vector::new(x * sign, 0.0, z * sign),
+                    );
+                }
+            }
+
+            let expected = Descriptor::from(expected);
+            assert_descriptor_close(
+                &get_b_site_descriptor(&nn, PhaseFactor::Positive).unwrap(), &expected,
+            );
+            assert_descriptor_close(
+                &get_b_site_descriptor(&nn, PhaseFactor::Negative).unwrap(), &-expected,
+            );
+            assert!(get_b_site_descriptor(&nn, PhaseFactor::Undefined).is_err());
+            nn.neighbors.reverse();
+            assert_descriptor_close(
+                &get_b_site_descriptor(&nn, PhaseFactor::Positive).unwrap(), &expected,
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_oy_pair_rejects_fewer_than_two_positions() {
+        assert!(get_oy_pair(&vec![]).is_err());
+        assert!(get_oy_pair(&vec![Cartesian::new(Vector::zeros())]).is_err());
     }
 
     #[test]
@@ -210,14 +233,14 @@ mod tests {
             &test_cell(),
         ).unwrap();
 
-        let expected = get_b_site_descriptor(&original[0]).unwrap();
-        let actual = get_b_site_descriptor(&reversed[0]).unwrap();
+        let expected = get_b_site_descriptor(&original[0], PhaseFactor::Positive).unwrap();
+        let actual = get_b_site_descriptor(&reversed[0], PhaseFactor::Positive).unwrap();
 
         assert_descriptor_close(&actual, &expected);
     }
 
     #[test]
-    fn test_calculate_bb_link_descriptors_averaging() {
+    fn test_calculate_bb_descriptors_applies_site_phase_factors() {
         let b1_position = Vector::new(0.2, 0.5, 0.5);
         let b2_position = Vector::new(0.7, 0.5, 0.5);
 
@@ -245,29 +268,32 @@ mod tests {
             &cell,
         ).unwrap();
 
-        let b_x = geometry::n_nearest_neighbors(
+        let mut b_x = geometry::n_nearest_neighbors(
             &b_atoms,
             &x_atoms,
             6,
             &cell,
         ).unwrap();
 
-        let descriptors = calculate_bb_descriptors(&b_b, &b_x).unwrap();
+        // Tilt the second site's O_y pair: r_y = (0.4, 1.0, 0.2).
+        for neighbor in &mut b_x[1].neighbors {
+            let position = *neighbor.atom_rel.position.as_vector();
+            if position.y.abs() > 0.3 {
+                let sign = position.y.signum();
+                neighbor.atom_rel.position = Cartesian::new(
+                    position + Vector::new(0.2 * sign, 0.0, 0.1 * sign),
+                );
+            }
+        }
+
+        let descriptors = calculate_descriptors(&b_b, &b_x).unwrap();
 
         assert_eq!(descriptors.len(), 2);
 
-        let expected = Descriptor::from([
-            0.0, 0.45, 0.0,
-            0.0, -0.55, 0.0,
-            0.5, -0.05, 0.0,
-            0.0, -0.05, 0.5,
-            -0.5, -0.05, 0.0,
-            0.0, -0.05, -0.5,
-        ]);
-
-        for result in &descriptors {
-            assert_descriptor_close(&result.descriptor, &expected);
-        }
+        // First site is untilted (+ phase); second has r_y = (0.4, 1.0, 0.2)
+        // and negative phase, giving [-(0.4 + 0.2), -(0.4 - 0.2)].
+        assert_descriptor_close(&descriptors[0].descriptor, &Descriptor::zeros());
+        assert_descriptor_close(&descriptors[1].descriptor, &Descriptor::from([-0.6, -0.2]));
 
         let b1_cart = geometry::direct_to_cartesian(
             Direct::new(b1_position).unwrap(),
@@ -293,13 +319,12 @@ mod tests {
         let b_b: Vec<NearestNeighbors> = Vec::new();
         let b_x: Vec<NearestNeighbors> = Vec::new();
 
-        let result = calculate_bb_descriptors(&b_b, &b_x).unwrap();
+        let result = calculate_descriptors(&b_b, &b_x).unwrap();
 
         assert!(result.is_empty());
     }
 
     #[test]
-    #[should_panic]
     fn test_get_b_site_descriptor_rejects_empty_neighbors() {
         let b_atoms = vec![
             create_mock_atom(
@@ -317,7 +342,7 @@ mod tests {
             &test_cell(),
         ).unwrap();
 
-        get_b_site_descriptor(&nn[0]).unwrap();
+        assert!(get_b_site_descriptor(&nn[0], PhaseFactor::Positive).is_err());
     }
 
     fn create_mock_atom(element: Element, position: Vector) -> DirectAtom {

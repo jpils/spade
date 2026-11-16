@@ -1,5 +1,5 @@
 use super::{geometry, BuildContext, Result, UnitCell, UnitCellAtoms, Elements, Atoms, Vector, DWType, Matrix};
-use crate::{cell::simulation::SimCell, error::Error, types::{AsVector, Atom, CartAtom, CartAtoms, Cartesian, DWSide, Direct, DirectAtoms}};
+use crate::{cell::simulation::SimCell, error::Error, types::{AsVector, Atom, CartAtom, CartAtoms, Cartesian, DWSide, Direct, DirectAtoms, UQuaternion}};
 
 pub(super) fn build_cell(ctx: BuildContext) -> Result<SimCell> {
     let atoms_dir = ctx.atoms.clone();
@@ -24,6 +24,78 @@ pub(super) fn build_cell(ctx: BuildContext) -> Result<SimCell> {
 
     Ok(SimCell(uc))
 }
+
+pub(super) fn reorder_x_sites(
+    atoms: &mut CartAtoms,
+    b_pos: Cartesian,
+    q: &UQuaternion,
+) -> Result<()> {
+    if atoms.len() != 6 {
+        return Err(Error::Generic("Expected six X-site atoms".into()));
+    }
+
+    // Keep the signed y pair at indices 0 and 3.
+    let slots = [1, 2, 4, 5];
+
+    // Transform B-X displacements into the fitted local frame.
+    let local = slots.map(|i| {
+        let displacement =
+            atoms[i].position.as_vector() - b_pos.as_vector();
+
+        q.inverse_transform_vector(&displacement)
+    });
+
+    if local.iter().any(|v| v.norm_squared() < 1e-20) {
+        return Err(Error::Generic("Zero-length B-X bond".into()));
+    }
+
+    // Reference order of the four remaining sites.
+    let directions = [
+        -Vector::z(),
+        -Vector::x(),
+         Vector::z(),
+         Vector::x(),
+    ];
+
+    let mut best = [0, 1, 2, 3];
+    let mut best_score = f64::NEG_INFINITY;
+
+    for a in 0..4 {
+        for b in 0..4 {
+            if b == a { continue; }
+
+            for c in 0..4 {
+                if c == a || c == b { continue; }
+
+                let d = 6 - a - b - c;
+                let permutation = [a, b, c, d];
+
+                let score: f64 = permutation
+                    .iter()
+                    .enumerate()
+                    .map(|(j, &i)| {
+                        local[i].normalize().dot(&directions[j])
+                    })
+                    .sum();
+
+                if score > best_score {
+                    best_score = score;
+                    best = permutation;
+                }
+            }
+        }
+    }
+
+    // Reorder the existing atoms without changing their positions.
+    let original = slots.map(|i| atoms[i]);
+
+    for (slot, index) in slots.into_iter().zip(best) {
+        atoms[slot] = original[index];
+    }
+
+    Ok(())
+}
+
 
 fn global_frame(mut atoms: CartAtoms, com: Cartesian) -> CartAtoms {
     for atom in &mut atoms {

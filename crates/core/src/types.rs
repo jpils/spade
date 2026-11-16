@@ -265,8 +265,7 @@ impl PhaseFactor {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct CellAlignment {
     pub unit_quaternion: UQuaternion,
-    pub ref_variant: RotationVariant, 
-    pub error: f64
+    pub ref_variant: PermutationVariant, 
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -327,7 +326,7 @@ pub struct AtomDisplacements {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum RotationVariant {
+pub enum PermutationVariant {
     R0,
     R90,
     R180,

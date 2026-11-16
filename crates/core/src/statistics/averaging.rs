@@ -200,7 +200,7 @@ mod tests {
     use crate::{
         cell::{UnitCell, UnitCellAtoms},
         observables::op::Op,
-        types::{Atom, Cartesian, CellAlignment, Element, RotationVariant, UQuaternion},
+        types::{Atom, Cartesian, CellAlignment, Element, PermutationVariant, UQuaternion},
     };
 
     const EPS: f64 = 1.0e-12;
@@ -531,8 +531,7 @@ mod tests {
             },
             alignment: CellAlignment {
                 unit_quaternion: UQuaternion::identity(),
-                ref_variant: RotationVariant::R0,
-                error: 0.0,
+                ref_variant: PermutationVariant::R0,
             },
         }
     }

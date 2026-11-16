@@ -7,14 +7,14 @@ use crate::types::AsVector;
 use crate::{types::{AtomDisplacements, Matrix, UQuaternion}};
 
 pub struct GradientDescentCtx<'a> {
-    reference_uc: &'a RefCell, 
-    centered_simulation_uc: &'a SimCell,
-    lattice_const: f64,
-    init_quaternion: UQuaternion,
-    step_size: f64,
-    max_iter_gradient_descent: usize,
-    max_iter_line_search: usize,
-    max_step_size_adjustments: usize
+    pub reference_uc: &'a RefCell, 
+    pub centered_simulation_uc: &'a SimCell,
+    pub lattice_const: f64,
+    pub init_quaternion: UQuaternion,
+    pub step_size: f64,
+    pub max_iter_gradient_descent: usize,
+    pub max_iter_line_search: usize,
+    pub max_step_size_adjustments: usize
 }
 
 pub fn gradient_descent(ctx: &GradientDescentCtx) -> Result<UQuaternion> {
@@ -198,7 +198,7 @@ mod tests {
     use super::*;
     use crate::{
         cell::{reference::{RefCell, RefCellBuilder}, simulation::SimCell, CellGeometry},
-        types::{AtomDisplacements, CartAtom, Cartesian, Element, RotationVariant, Vector},
+        types::{AtomDisplacements, CartAtom, Cartesian, Element, PermutationVariant, Vector},
     };
     use nalgebra::Unit;
     use std::f64::consts::FRAC_PI_6;
@@ -411,7 +411,7 @@ mod tests {
             .geometry(CellGeometry::Cubic)
             .lattice_constant(1.0)
             .elements(vec![Element::Sr, Element::Ti, Element::O])
-            .rotation_variant(RotationVariant::R0)
+            .permutation_variant(PermutationVariant::R0)
             .build()
             .unwrap()
     }

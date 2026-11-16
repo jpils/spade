@@ -1,7 +1,7 @@
 use std::f64::consts::PI;
 
 use super::*;
-use crate::types::{AsVector, Element, Elements, RotationVariant};
+use crate::types::{AsVector, Element, Elements, PermutationVariant};
 
 #[test]
 fn test_build_no_tilts() {
@@ -10,7 +10,7 @@ fn test_build_no_tilts() {
         .elements(ctx.elements.clone())
         .lattice_constant(ctx.lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .build().unwrap();
 
     let a_atoms = cell.unit_cell.cell_atoms.a;
@@ -38,7 +38,7 @@ fn test_build_with_tilts() {
         .geometry(ctx.geometry)
         .tilt_axis(ctx.tilt_axis)
         .tilt_angle(ctx.tilt_angle)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .build().unwrap();
 
     let a_atoms = cell.unit_cell.cell_atoms.a;
@@ -67,7 +67,7 @@ fn test_build_invalid_geometry() {
         .geometry(ctx.geometry)
         .tilt_axis(ctx.tilt_axis)
         .tilt_angle(ctx.tilt_angle)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .build().unwrap();
 }
 
@@ -77,7 +77,7 @@ fn test_build_errors_when_geometry_missing() {
     let res = RefCellBuilder::new()
         .elements(ctx.elements)
         .lattice_constant(ctx.lattice_const)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .build();
 
     assert!(res.is_err());
@@ -89,7 +89,7 @@ fn test_build_errors_when_lattice_constant_missing() {
     let res = RefCellBuilder::new()
         .elements(ctx.elements)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .build();
 
     assert!(res.is_err());
@@ -101,7 +101,7 @@ fn test_build_errors_when_elements_missing() {
     let res = RefCellBuilder::new()
         .lattice_constant(ctx.lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .build();
 
     assert!(res.is_err());
@@ -126,7 +126,7 @@ fn test_build_errors_when_element_count_is_not_three() {
         .elements(vec![Element::Sr, Element::Ti])
         .lattice_constant(ctx.lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .build();
 
     assert!(res.is_err());
@@ -167,7 +167,7 @@ fn test_build_accepts_zero_tilt_angle_without_axis() {
         .elements(ctx.elements)
         .lattice_constant(ctx.lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .tilt_angle(0.0)
         .build();
 
@@ -181,7 +181,7 @@ fn test_build_errors_when_tilt_axis_is_set_without_angle() {
         .elements(ctx.elements)
         .lattice_constant(ctx.lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .tilt_axis(ctx.tilt_axis)
         .build();
 
@@ -195,7 +195,7 @@ fn test_build_errors_when_tilt_axis_is_set_with_zero_angle() {
         .elements(ctx.elements)
         .lattice_constant(ctx.lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .tilt_axis(ctx.tilt_axis)
         .tilt_angle(0.0)
         .build();
@@ -210,7 +210,7 @@ fn test_build_errors_when_nonzero_tilt_angle_has_no_axis() {
         .elements(ctx.elements)
         .lattice_constant(ctx.lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .tilt_angle(ctx.tilt_angle)
         .build();
 
@@ -224,7 +224,7 @@ fn test_build_errors_when_tilt_angle_is_nan() {
         .elements(ctx.elements)
         .lattice_constant(ctx.lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .tilt_axis(ctx.tilt_axis)
         .tilt_angle(f64::NAN)
         .build();
@@ -239,7 +239,7 @@ fn test_build_errors_when_tilt_angle_is_infinite() {
         .elements(ctx.elements)
         .lattice_constant(ctx.lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant)
+        .permutation_variant(ctx.rotation_variant)
         .tilt_axis(ctx.tilt_axis)
         .tilt_angle(f64::INFINITY)
         .build();
@@ -254,7 +254,7 @@ fn valid_cubic_builder_with_lattice(lattice_const: f64) -> RefCellBuilder {
         .elements(ctx.elements)
         .lattice_constant(lattice_const)
         .geometry(ctx.geometry)
-        .rotation_variant(ctx.rotation_variant);
+        .permutation_variant(ctx.rotation_variant);
     builder
 }
 
@@ -264,7 +264,7 @@ struct Context {
     elements: Elements,
     tilt_angle: f64,
     tilt_axis: UVector,
-    rotation_variant: RotationVariant,
+    rotation_variant: PermutationVariant,
 }
 
 impl Context {
@@ -275,7 +275,7 @@ impl Context {
             elements: vec![Element::Sr, Element::Ti, Element::O],
             tilt_angle: PI/2.0,
             tilt_axis: UVector::new_normalize(Vector::new(0.0, 0.0, 1.0)),
-            rotation_variant: RotationVariant::R0,
+            rotation_variant: PermutationVariant::R0,
         }
     }
 
@@ -286,7 +286,7 @@ impl Context {
             elements: vec![Element::Sr, Element::Ti, Element::O],
             tilt_angle: PI/2.0,
             tilt_axis: UVector::new_normalize(Vector::new(0.0, 0.0, 1.0)),
-            rotation_variant: RotationVariant::R0,
+            rotation_variant: PermutationVariant::R0,
         }
     }
 }

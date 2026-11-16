@@ -1,4 +1,4 @@
-use crate::{cell::{AsUnitCell, UnitCellOps}, geometry, prelude::*, types::{CellAlignment, DWSide, DWType, DirectAtoms, Elements, Matrix}};
+use crate::{cell::{AsUnitCell, UnitCellOps}, geometry, prelude::*, types::{AsVector, CellAlignment, DWSide, DWType, DirectAtoms, Elements, Matrix}};
 use super::{CellGeometry, UnitCellAtoms, Atoms, Vector, UQuaternion, Element, Vectors, UnitCell};
 
 #[derive(Clone, Debug)]
@@ -37,6 +37,21 @@ impl UnitCellOps for SimCell {
     fn rotated_cell(&self, q: &crate::types::UQuaternion) -> Self {
         let uc = self.0.rotated_cell(q);
         Self(uc)
+    }
+}
+
+impl SimCell {
+    pub fn reorder_x_sites(&mut self, q: &UQuaternion) -> Result<()> {
+        let b_pos = self.0.cell_atoms.b
+            .first()
+            .ok_or_else(|| Error::Generic("Missing B-site atom".into()))?
+            .position;
+
+        cubic::reorder_x_sites(
+            &mut self.0.cell_atoms.x,
+            b_pos,
+            q,
+        )
     }
 }
 

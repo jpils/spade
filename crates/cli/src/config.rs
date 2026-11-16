@@ -36,7 +36,7 @@ pub(crate) struct Cell {
     pub(crate) geometry: CellGeometry,
     pub(crate) dw_type: DWType,
     pub(crate) lattice_constant: f64,
-    pub(crate) elements: Option<[Element; 3]>,
+    pub(crate) elements: [Element; 3],
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +49,8 @@ pub(crate) struct Analysis {
 pub(crate) struct Fitting {
     pub(crate) step_size: Option<f64>,
     pub(crate) max_iter: Option<usize>,
+    pub(crate) max_iter_line_search: Option<usize>,
+    pub(crate) max_step_size_adjustments: Option<usize>,
     pub(crate) n_clusters: Option<usize>
 }
 
