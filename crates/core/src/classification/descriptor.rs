@@ -14,9 +14,9 @@ pub struct BbDescriptor {
 
 pub type BbDescriptors = Vec<BbDescriptor>;
 
-pub fn calculate_bb_descriptors(mut b_b: Vec<NearestNeighbors>, b_x: &[NearestNeighbors]) -> Result<BbDescriptors> {
+pub fn calculate_bb_descriptors(mut b_b: &[NearestNeighbors], b_x: &[NearestNeighbors]) -> Result<BbDescriptors> {
     let mut descriptors: BbDescriptors = Vec::with_capacity(b_b.len());
-    while let Some(b) = b_b.pop() {
+    for b in b_b {
         let current = b.reference;
         let neighbor = b.neighbors[0].atom_abs;
 
@@ -252,7 +252,7 @@ mod tests {
             &cell,
         ).unwrap();
 
-        let descriptors = calculate_bb_descriptors(b_b, &b_x).unwrap();
+        let descriptors = calculate_bb_descriptors(&b_b, &b_x).unwrap();
 
         assert_eq!(descriptors.len(), 2);
 
@@ -293,7 +293,7 @@ mod tests {
         let b_b: Vec<NearestNeighbors> = Vec::new();
         let b_x: Vec<NearestNeighbors> = Vec::new();
 
-        let result = calculate_bb_descriptors(b_b, &b_x).unwrap();
+        let result = calculate_bb_descriptors(&b_b, &b_x).unwrap();
 
         assert!(result.is_empty());
     }

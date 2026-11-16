@@ -12,6 +12,7 @@ elements = ["Sr", "Ti", "O"]
 [analysis.fitting]
 step_size = 1e-5
 max_iter = 100
+n_clusters = 2
 
 [analysis.statistics]
 blocks = 20

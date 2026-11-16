@@ -1,4 +1,6 @@
+use crate::{classification::descriptor, types::{Atom, CartAtom, Cartesian}};
 use super::descriptor::{Descriptor, Descriptors, BbDescriptor, BbDescriptors};
+use crate::prelude::*;
 use rand::seq::{IteratorRandom};
 
 #[derive(Clone, Default, Debug)]
@@ -52,13 +54,23 @@ pub fn k_means(data: &BbDescriptors, n_clusters: usize) -> Clusters {
 }
 
 #[allow(clippy::cast_precision_loss)]
-pub fn get_cluster_center(cluster: &Descriptors) -> Descriptor {
+pub fn descriptor_closest_to_center(cluster: &BbDescriptors) -> Result<&BbDescriptor> {
     let centroid = cluster
         .iter()
-        .fold(Descriptor::zeros(), |acc, &point| acc + point);
+        .fold(Descriptor::zeros(), |acc, &point| acc + point.descriptor);
 
+    let cluster_center = centroid / cluster.len() as f64;
 
-    centroid / cluster.len() as f64
+    let descriptor_dists = cluster.iter()
+        .map(|desc| (desc.descriptor - cluster_center).norm_squared())
+        .collect::<Vec<_>>();
+
+    let center_descriptor = cluster.iter()
+        .zip(descriptor_dists)
+        .min_by(|(_, dist_a), (_, dist_b)| dist_a.total_cmp(dist_b))
+        .ok_or_else(|| Error::Generic("cluster is empty".into()))?;
+
+    Ok(center_descriptor.0)
 }
 
 fn converged(current: &[Descriptor], new: &[Descriptor]) -> bool {
@@ -114,17 +126,26 @@ mod tests {
     }
 
     #[test]
-    fn test_get_cluster_center() {
+    fn test_descriptor_closest_to_center() {
         let cluster = vec![
-            uniform_descriptor(1.0),
-            uniform_descriptor(2.0),
-            uniform_descriptor(3.0),
+            bb_descriptor(1.0),
+            bb_descriptor(2.0),
+            bb_descriptor(6.0),
         ];
 
-        let center = get_cluster_center(&cluster);
-        let expected_center = uniform_descriptor(2.0); // Mean of 1, 2, 3 is 2
+        let center = descriptor_closest_to_center(&cluster).unwrap();
+        // Mean is 3.0; the closest input descriptor is 2.0.
+        let expected_center = uniform_descriptor(2.0);
 
-        assert!((center - expected_center).norm_squared() < 1e-12);
+        assert!((center.descriptor - expected_center).norm_squared() < 1e-12);
+        assert!(std::ptr::eq(center, &cluster[1]));
+    }
+
+    #[test]
+    fn test_descriptor_closest_to_center_empty_cluster() {
+        let error = descriptor_closest_to_center(&Vec::new()).unwrap_err();
+
+        assert!(matches!(error, Error::Generic(message) if message == "cluster is empty"));
     }
 
     #[test]

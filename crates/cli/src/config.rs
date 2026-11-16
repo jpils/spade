@@ -49,6 +49,7 @@ pub(crate) struct Analysis {
 pub(crate) struct Fitting {
     pub(crate) step_size: Option<f64>,
     pub(crate) max_iter: Option<usize>,
+    pub(crate) n_clusters: Option<usize>
 }
 
 #[derive(Deserialize, Debug)]
