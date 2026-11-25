@@ -21,14 +21,5 @@ pub enum ObservableKind {
     DwDiffusionConst
 }
 
-#[derive(Debug, Clone)]
-pub enum ObservableResult {
-    OP (Vec<Op>),
-    Polarization (Vec<Polarization>),
-    Strain { epsilon: Matrix },
-    GammaMode { gamma: Vector },
-    DwDiffusionConst { diff_const: f64 }
-}
-
 pub mod op;
 pub mod polarization;

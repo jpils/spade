@@ -1,12 +1,14 @@
 use std::{cmp::min_by, path::PathBuf};
 
-use crate::args::AnalyzeArgs;
+use crate::{args::AnalyzeArgs, commands::analyze::observables::calculate_observables};
 use crate::config::ConfigSpec;
 
 use anyhow::{Context, Error, Ok, Result};
 use serde::de;
 use spade_core::{cell::{AsUnitCell, CellGeometry, UnitCellOps, reference::RefCellBuilder, simulation::{FittedSimCell, SimCell, SimCellBuilder}}, classification::{descriptor::{BDescriptor, BDescriptors, DescribedCell, calculate_descriptors}, kmeans::{Clusters, descriptor_closest_to_domain_center, k_means}}, geometry::{self, NearestNeighbors, cartesian_to_direct, n_nearest_neighbors}, optimization::{GradientDescentCtx, gradient_descent}, parser::Parser, types::{AsVector, Atom, Atoms, CartAtom, CartAtoms, Cartesian, CellAlignment, CoordinatesType, DWType, Direct, DirectAtom, DirectAtoms, Elements, Matrix, PermutationVariant, ReadResult, SupercellAtoms, UQuaternion, Vector, Vectors}};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
+
+mod observables;
 
 pub(crate) fn run(
     spec: &ConfigSpec, 
@@ -49,6 +51,12 @@ pub(crate) fn run(
             domain_seed_ids, 
             spec
         )?;
+
+        let observables = observables::calculate_observables(
+            &fitted_cells, 
+            &nearest_neighbors.b_b_nns, 
+            spec
+        );
     }
 
     Ok(())

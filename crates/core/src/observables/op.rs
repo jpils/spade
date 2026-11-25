@@ -16,15 +16,15 @@ use nalgebra::{ComplexField, SVector, Unit};
 type Vector15 = SVector<f64, 15>;
 
 pub struct OpSpec {
-    lattice_const: f64,
-    elements: Elements,
-    geometry: CellGeometry,
+    pub lattice_const: f64,
+    pub elements: Elements,
+    pub geometry: CellGeometry,
 }
 
 pub struct OpCtx<'a, 'b, 'c> {
-    fitted_ucs: Vec<&'a FittedSimCell>,
-    ref_uc: &'b RefCell,
-    b_site_nearest_neighbors: &'c Vec<NearestNeighbors>
+    pub fitted_ucs: Vec<&'a FittedSimCell>,
+    pub ref_uc: &'b RefCell,
+    pub b_site_nearest_neighbors: &'c Vec<NearestNeighbors>
 }
 
 #[derive(Debug, Clone)]
